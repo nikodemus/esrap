@@ -85,7 +85,7 @@
   (defpackage :esrap
     (:use :cl :alexandria)
     (:export 
-     #:! #:? #:+ #:*
+     #:! #:? #:+ #:* #:&
      #:add-rule
      #:concat
      #:describe-grammar
