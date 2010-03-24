@@ -69,7 +69,6 @@
 ;;;;
 ;;;; TODO:
 ;;;;  - character classes
-;;;;  - nicer error messages
 ;;;;  - setting breaks on rules
 ;;;;  - proper tests
 ;;;;  - states
@@ -79,7 +78,6 @@
 ;;;;                       :transform-subseq #'parse-integer)
 ;;;;  - optimizing single-character alternatives: store in a string,
 ;;;;    not in a list.
-;;;;  - subexpression failures for ordered choises are not interesting.
 
 (defpackage :esrap
     (:use :cl :alexandria)
@@ -702,12 +700,15 @@ inspection."
 ;;;
 ;;; FIXME: It might be worth it to special-case terminals of length 1.
 
-(declaim (notinline exec-terminal))
+(declaim (inline match-terminal-p))
+(defun match-terminal-p (string length text position end case-sensitive-p)
+  (and (<= (+ length position) end)
+       (if case-sensitive-p
+           (string= string text :start2 position :end2 (+ position length))
+           (string-equal string text :start2 position :end2 (+ position length)))))
+
 (defun exec-terminal (string length text position end case-sensitive-p)
-  (if (and (<= (+ length position) end)
-           (if case-sensitive-p
-               (string= string text :start2 position :end2 (+ position length))
-               (string-equal string text :start2 position :end2 (+ position length))))
+  (if (match-terminal-p string length text position end case-sensitive-p)
       (make-result
        :position (+ length position)
        :production string)
@@ -803,25 +804,81 @@ inspection."
 
 (defun compile-ordered-choise (expression)
   (with-expression (expression (or &rest subexprs))
-    (let ((functions (mapcar #'compile-expression subexprs)))
-      (named-lambda compiled-ordered-choise (text position end)
-        (let (last-error)
-          (dolist (fun functions
+    (let ((type :characters)
+          (canonized nil))
+      (dolist (sub subexprs)
+        (when (typep sub '(or character string))
+          (print (list :sub sub :canon canonized))
+          (let* ((this (string sub))
+                 (len (length this)))
+            (unless (some (lambda (seen)
+                            (not
+                             ;; Check for "FOO" followed by "FOOBAR" -- the
+                             ;; latter would never match, but it's an easy mistake to make.
+                             (or (print (mismatch this seen :end1 (min (length seen) len)))
+                                 (warn "Prefix ~S before ~S in an ESRAP OR expression."
+                                       seen this))))
+                        canonized)
+              (push this canonized))))
+        (case type
+          (:general)
+          (:strings
+           (unless (typep sub '(or character string))
+             (setf type :general)))
+          (:characters
+           (unless (typep sub '(or character (string 1)))
+             (if (typep sub 'string)
+                 (setf type :strings)
+                 (setf type :general))))))
+      ;; FIXME: Optimize case-insensitive terminals as well.
+      (ecase type
+        (:characters
+         ;; If every subexpression is a length 1 string, we can represent the whole
+         ;; choise with a single string.
+         (let ((choises (apply #'concatenate 'string canonized)))
+           (named-lambda compiled-character-choise (text position end)
+             (let ((c (and (<= position end) (find (char text position) choises))))
+               (if c
+                   (make-result :position (+ 1 position)
+                                :production (list (string c)))
                    (make-error-result
                     :expression expression
-                    :position (if last-error
-                                  (error-result-position last-error)
-                                  position)
-                    :detail last-error))
-            (let ((result (funcall fun text position end)))
-              (if (error-result-p result)
-                  (when (or (and (not last-error)
-                                 (< position (error-result-position result)))
-                            (and last-error
-                                 (< (error-result-position last-error)
-                                    (error-result-position result))))
-                    (setf last-error result))
-                  (return result)))))))))
+                    :position position))))))
+        (:strings
+         ;; If every subexpression is a string, we can represent the whole choise
+         ;; with a list of strings.
+         (let ((choises (nreverse canonized)))
+           (named-lambda compiled-character-choise (text position end)
+             (dolist (choise choises
+                      (make-error-result
+                       :expression expression
+                       :position position))
+               (let ((len (length choise)))
+                 (when (match-terminal-p choise len text position end t)
+                   (return
+                     (make-result :position (+ len position)
+                                  :production (list choise)))))))))
+        (:general
+         ;; In the general case, compile subexpressions and call.
+         (let ((functions (mapcar #'compile-expression subexprs)))
+             (named-lambda compiled-ordered-choise (text position end)
+               (let (last-error)
+                 (dolist (fun functions
+                          (make-error-result
+                           :expression expression
+                           :position (if last-error
+                                         (error-result-position last-error)
+                                         position)
+                           :detail last-error))
+                   (let ((result (funcall fun text position end)))
+                     (if (error-result-p result)
+                         (when (or (and (not last-error)
+                                        (< position (error-result-position result)))
+                                   (and last-error
+                                        (< (error-result-position last-error)
+                                           (error-result-position result))))
+                           (setf last-error result))
+                         (return result))))))))))))
 
 ;;; Greedy repetitions
 
