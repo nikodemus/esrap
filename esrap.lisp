@@ -123,10 +123,10 @@ and expressions of the form \(~ <literal>) denote case-insensitive terminals."
 
 ;;; RULE REPRESENTATION AND STORAGE
 ;;;
-;;; For each rule, there is a cons cell in *RULES*, which has the
-;;; function that implements the rule in car, and the rule object
-;;; in CDR. A RULE object can be attaches to only one non-terminal
-;;; at a time, which is accessible via RULE-SYMBOL.
+;;; For each rule, there is a cons cell in *RULES*, which has the function
+;;; that implements the rule in car, and the rule object in CDR. A RULE object
+;;; can be attached to only one non-terminal at a time, which is accessible
+;;; via RULE-SYMBOL.
 
 (defvar *rules* (make-hash-table))
 
@@ -341,6 +341,7 @@ symbols."
     (process-parse-result
      (let ((*cache* (make-cache)))
        (eval-expression expression text start end))
+     text
      end
      junk-allowed)))
 
@@ -357,28 +358,33 @@ symbols."
                     (end (or end (length text))))
                 (process-parse-result
                  (funcall ,expr-fun text start end)
+                 text
                  end
                  junk-allowed)))
             ,@arguments)))
       form))
 
-(defun process-parse-result (result end junk-allowed)
+(defun process-parse-result (result text end junk-allowed)
   (if (error-result-p result)
       (if junk-allowed
           (values nil 0)
-          (error "~A"
+          (error "Parse error:~%~A"
                  (with-output-to-string (s)
-                   (format s "Expression ~S failed at ~S~:[.~;:~]"
-                           (error-result-expression result)
-                           (error-result-position result)
-                           (error-result-detail result))
+                   (format s " Expression ~S"
+                           (error-result-expression result))
                    (labels ((rec (e)
                               (when e
-                                (format s "~& subexpression ~S failed at ~S."
-                                        (error-result-expression e)
-                                        (error-result-position e))
+                                (format s "~&   subexpression ~S"
+                                        (error-result-expression e))
                                 (rec (error-result-detail e)))))
-                     (rec (error-result-detail result))))))
+                     (rec (error-result-detail result))
+                     (let* ((position (error-result-position result))
+                            (start (max 0 (- position 24)))
+                            (end (min (length text) (+ position 24))))
+                       (format s "~& failed at:~&   \"~A\"" (subseq text start end))
+                       (format s "~&    ~A^"
+                               (make-string (- position start)
+                                            :initial-element #\space)))))))
       (let ((position (result-position result)))
         (values (result-production result)
                 (when (< position end)
@@ -509,7 +515,7 @@ inspection."
               (if (error-result-p result)
                   (make-error-result
                    :expression symbol
-                   :position position
+                   :position (error-result-position result)
                    :detail result)
                   (make-result
                    :position (result-position result)
@@ -674,7 +680,7 @@ inspection."
          :production (subseq text position limit)
          :position limit)
         (make-error-result
-         :expression 'character
+         :expression `(string ,length)
          :position position))))
 
 (defun eval-character (text position end)
@@ -719,8 +725,12 @@ inspection."
 
 ;;; Nonterminals
 
+(defparameter *eval-nonterminals* nil)
+
 (defun eval-nonterminal (symbol text position end)
-  (funcall (cell-function (ensure-rule-cell symbol)) text position end))
+  (if *eval-nonterminals*
+      (eval-expression (rule-expression (find-rule symbol)) text position end)
+      (funcall (cell-function (ensure-rule-cell symbol)) text position end)))
 
 (defun compile-nonterminal (symbol)
   (let ((cell (if (boundp '*current-rule*)
@@ -777,13 +787,17 @@ inspection."
       (dolist (expr subexprs
                (make-error-result
                 :expression expression
-                :position position
+                :position (if last-error
+                              (error-result-position last-error)
+                              position)
                 :detail last-error))
         (let ((result (eval-expression expr text position end)))
           (if (error-result-p result)
-              (when (or (not last-error)
-                        (< (error-result-position last-error)
-                           (error-result-position result)))
+              (when (or (and (not last-error)
+                             (< position (error-result-position result)))
+                        (and last-error
+                             (< (error-result-position last-error)
+                                (error-result-position result))))
                 (setf last-error result))
               (return result)))))))
 
@@ -795,13 +809,17 @@ inspection."
           (dolist (fun functions
                    (make-error-result
                     :expression expression
-                    :position position
+                    :position (if last-error
+                                  (error-result-position last-error)
+                                  position)
                     :detail last-error))
             (let ((result (funcall fun text position end)))
               (if (error-result-p result)
-                  (when (or (not last-error)
-                            (< (error-result-position last-error)
-                               (error-result-position result)))
+                  (when (or (and (not last-error)
+                                 (< position (error-result-position result)))
+                            (and last-error
+                                 (< (error-result-position last-error)
+                                    (error-result-position result))))
                     (setf last-error result))
                   (return result)))))))))
 
