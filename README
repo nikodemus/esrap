@@ -1,5 +1,4 @@
 ESRAP -- a packrat parser for Common Lisp
-by Nikodemus Siivola, 2007-2010
 
 In addition to regular Packrat / Parsing Grammar / TDPL features ESRAP
 supports:
@@ -36,6 +35,8 @@ Licence:
 
 Syntax overview:
 
+ <literal>                 -- case-sensitive terminal
+ (~ <literal>)             -- case-insensitive terminal
  character                 -- any single character
  (string length)           -- any string of length
  (and &rest sequence)
@@ -65,16 +66,3 @@ Examples:
  (parse '(oddp decimal) "123")                  => 123
 
  (parse '(evenp decimal) "123" :junk-allowed t) => NIL, 0
-
-TODO:
- - character classes
- - nicer error messages
- - setting breaks on rules
- - proper tests
- - states
- - documentation
- - transform-production vs. transform-subseq:
-   (add-rule 'decimal :expression '(+ (or "0" "1" ...))
-                      :transform-subseq #'parse-integer)
- - optimizing single-character alternatives: store in a string,
-   not in a list.

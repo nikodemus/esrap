@@ -1,5 +1,5 @@
 ;;;; ESRAP -- a packrat parser for Common Lisp
-;;;; by Nikodemus Siivola, 2007
+;;;; by Nikodemus Siivola, 2007-2010
 ;;;;
 ;;;; In addition to regular Packrat / Parsing Grammar / TDPL features
 ;;;; ESRAP supports:
@@ -35,6 +35,8 @@
 ;;;;
 ;;;; Syntax overview:
 ;;;;
+;;;;  <literal>                 -- case-sensitive terminal
+;;;;  (~ <literal>)             -- case-insensitive terminal
 ;;;;  character                 -- any single character
 ;;;;  (string length)           -- any string of length
 ;;;;  (and &rest sequence)
@@ -57,7 +59,7 @@
 ;;;;  (add-rule 'decimal
 ;;;;            (make-instance 'rule
 ;;;;             :expression '(+ (or "0" "1" "2" "3" "4" "5" "6" "7" "8" "9"))
-;;;;             :transform (lambda (list) 
+;;;;             :transform (lambda (list)
 ;;;;                          (parse-integer (format nil "~{~A~}" list)))))
 ;;;;   => DECIMAL
 ;;;;
@@ -77,33 +79,26 @@
 ;;;;                       :transform-subseq #'parse-integer)
 ;;;;  - optimizing single-character alternatives: store in a string,
 ;;;;    not in a list.
+;;;;  - subexpression failures for ordered choises are not interesting.
 
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  
-  (require :alexandria)
-  
-  (defpackage :esrap
+(defpackage :esrap
     (:use :cl :alexandria)
-    (:export 
-     #:! #:? #:+ #:* #:&
+    (:export
+     #:! #:? #:+ #:* #:& #:~
      #:add-rule
      #:concat
      #:describe-grammar
      #:defrule
-     #:esrap-version
      #:find-rule
-     #:parse 
+     #:parse
      #:rule
      #:rule-dependencies
      #:remove-rule
-     )))
+     ))
 
 (in-package :esrap)
 
 ;;; Miscellany
-
-(defun esrap-version ()
-  "0.1")
 
 (defun concat (&rest arguments)
   "Arguments must be strings, or lists whose leaves are strings.
@@ -121,8 +116,10 @@ Catenates all the strings in arguments into a single string."
   '(and symbol (not (member character nil))))
 
 (deftype terminal ()
-  "Strings and characters are used as terminal symbols."
-  '(or string character))
+  "Literal strings and characters are used as case-sensitive terminal symbols,
+and expressions of the form \(~ <literal>) denote case-insensitive terminals."
+  `(or string character
+       (cons (eql ~) (cons (or string character) null))))
 
 ;;; RULE REPRESENTATION AND STORAGE
 ;;;
@@ -141,7 +138,7 @@ Catenates all the strings in arguments into a single string."
   '(cons function (cons t t)))
 
 (declaim (inline cell-function))
-(defun cell-function (cell) 
+(defun cell-function (cell)
   (car cell))
 
 (defun (setf cell-function) (function cell)
@@ -193,7 +190,7 @@ Catenates all the strings in arguments into a single string."
   ((%symbol
     :initform nil
     :reader rule-symbol)
-   (%expression 
+   (%expression
     :initarg :expression
     :initform (required-argument :expression)
     :reader rule-expression)
@@ -232,7 +229,7 @@ Catenates all the strings in arguments into a single string."
   "Returns the dependencies of the RULE: primary value is a list of defined
 nonterminal symbols, and secondary value is a list of undefined nonterminal
 symbols."
-  (sort-dependencies 
+  (sort-dependencies
    (rule-symbol rule) (%expression-dependencies (rule-expression rule) nil)))
 
 (defun rule-direct-dependencies (rule)
@@ -282,7 +279,7 @@ symbols."
             (,result (get-cached ,symbol ,position ,cache))
             (*nonterminal-stack* (cons ,symbol *nonterminal-stack*)))
        (cond ((eq t ,result)
-              (error "Left recursion in nonterminal ~S, at ~S.~%Path: ~{~S~^ -> ~}" 
+              (error "Left recursion in nonterminal ~S, at ~S.~%Path: ~{~S~^ -> ~}"
                      ,symbol ,position (nreverse *nonterminal-stack*)))
              (,result
               ,result)
@@ -369,8 +366,9 @@ symbols."
   (if (error-result-p result)
       (if junk-allowed
           (values nil 0)
-          (error (with-output-to-string (s)
-                   (format s "Expression ~S failed at ~S~:[.~;:~]" 
+          (error "~A"
+                 (with-output-to-string (s)
+                   (format s "Expression ~S failed at ~S~:[.~;:~]"
                            (error-result-expression result)
                            (error-result-position result)
                            (error-result-detail result))
@@ -378,11 +376,11 @@ symbols."
                               (when e
                                 (format s "~& subexpression ~S failed at ~S."
                                         (error-result-expression e)
-                                        (error-result-position e)) 
+                                        (error-result-position e))
                                 (rec (error-result-detail e)))))
                      (rec (error-result-detail result))))))
       (let ((position (result-position result)))
-        (values (result-production result) 
+        (values (result-production result)
                 (when (< position end)
                   (if junk-allowed
                       position
@@ -395,7 +393,7 @@ symbols."
         (when transform
           (error "Multiple transforms in DEFRULE:~% ~S" form))
         (ecase (car option)
-          (:constant 
+          (:constant
            (setf transform `(lambda (x) (declare (ignore x)) ,(second option))))
           (:concat
            (when (second option)
@@ -403,6 +401,8 @@ symbols."
           (:lambda
            (destructuring-bind (lambda-list &body forms) (cdr option)
              (setf transform `(lambda ,lambda-list ,@forms))))
+          (:function
+           (setf transform `(function ,(second option))))
           (:destructure
            (destructuring-bind (lambda-list &body forms) (cdr option)
              (setf transform
@@ -425,7 +425,7 @@ associated with a rule, the old rule is removed first."
     (error "~S is already associated with the nonterminal ~S -- remove it first."
            rule (rule-symbol rule)))
   (let ((cell (ensure-rule-cell symbol))
-        (function (compile-rule symbol 
+        (function (compile-rule symbol
                                 (rule-expression rule)
                                 (rule-transform rule))))
     (setf (cell-function cell) function
@@ -470,7 +470,7 @@ true."
 (defun symbol-length (x)
   (length (symbol-name x)))
 
-(defun describe-grammar (symbol &optional (stream *standard-output*))  
+(defun describe-grammar (symbol &optional (stream *standard-output*))
   "Prints the grammar tree rooted at nonterminal SYMBOL to STREAM for human
 inspection."
   (check-type symbol nonterminal)
@@ -480,16 +480,16 @@ inspection."
           (t
            (format stream "~&Grammar ~S:~%" symbol)
            (multiple-value-bind (defined undefined) (rule-dependencies rule)
-             (let ((length 
+             (let ((length
                     (+ 4 (max (reduce #'max (mapcar #'symbol-length defined)
                                       :initial-value 0)
                               (reduce #'max (mapcar #'symbol-length undefined)
                                       :initial-value 0)))))
-               (format stream "~3T~S~VT<- ~S~%" 
+               (format stream "~3T~S~VT<- ~S~%"
                        symbol length (rule-expression rule))
                (when defined
                  (dolist (s defined)
-                   (format stream "~3T~S~VT<- ~S~%" 
+                   (format stream "~3T~S~VT<- ~S~%"
                            s length (rule-expression (find-rule s)))))
                (when undefined
                  (format stream "~%Undefined nonterminal~P:~%~{~3T~S~%~}"
@@ -507,7 +507,7 @@ inspection."
           (with-cached-result (symbol position)
             (let ((result (funcall function text position end)))
               (if (error-result-p result)
-                  (make-error-result 
+                  (make-error-result
                    :expression symbol
                    :position position
                    :detail result)
@@ -599,7 +599,9 @@ inspection."
     ((eql character)
      (eval-character text position end))
     (terminal
-     (eval-terminal (string expression) text position end))    
+     (if (consp expression)
+         (eval-terminal (string (second expression)) text position end nil)
+         (eval-terminal (string expression) text position end t)))
     (nonterminal
      (eval-nonterminal expression text position end))
     (cons
@@ -632,14 +634,16 @@ inspection."
     ((eql character)
      (compile-character))
     (terminal
-     (compile-terminal (string expression)))
+     (if (consp expression)
+         (compile-terminal (string (second expression)) nil)
+         (compile-terminal (string expression) t)))
     (nonterminal
      (compile-nonterminal expression))
     (cons
      (case (car expression)
        (string
         (compile-string expression))
-       (and 
+       (and
         (compile-sequence expression))
        (or
         (compile-ordered-choise expression))
@@ -692,12 +696,12 @@ inspection."
 ;;;
 ;;; FIXME: It might be worth it to special-case terminals of length 1.
 
-(declaim (inline exec-terminal))
-(defun exec-terminal (string length text position end)
+(declaim (notinline exec-terminal))
+(defun exec-terminal (string length text position end case-sensitive-p)
   (if (and (<= (+ length position) end)
-           (dotimes (i length t)
-             (unless (eql (char string i) (char text (+ i position)))
-               (return nil))))
+           (if case-sensitive-p
+               (string= string text :start2 position :end2 (+ position length))
+               (string-equal string text :start2 position :end2 (+ position length))))
       (make-result
        :position (+ length position)
        :production string)
@@ -705,13 +709,13 @@ inspection."
        :expression string
        :position position)))
 
-(defun eval-terminal (string text position end)
-  (exec-terminal string (length string) text position end))
+(defun eval-terminal (string text position end case-sensitive-p)
+  (exec-terminal string (length string) text position end case-sensitive-p))
 
-(defun compile-terminal (string)
+(defun compile-terminal (string case-sensitive-p)
   (let ((length (length string)))
     (named-lambda compiled-terminal (text position end)
-      (exec-terminal string length text position end))))
+      (exec-terminal string length text position end case-sensitive-p))))
 
 ;;; Nonterminals
 
@@ -752,13 +756,13 @@ inspection."
     (let ((functions (mapcar #'compile-expression subexprs)))
       (named-lambda compiled-sequence (text position end)
           (let (results)
-            (dolist (fun functions 
+            (dolist (fun functions
                      (make-result
                       :position position
                       :production (mapcar #'result-production (nreverse results))))
               (let ((result (funcall fun text position end)))
                 (if (error-result-p result)
-                    (return (make-error-result 
+                    (return (make-error-result
                              :expression expression
                              :position position
                              :detail result))
@@ -771,14 +775,14 @@ inspection."
   (with-expression (expression (or &rest subexprs))
     (let (last-error)
       (dolist (expr subexprs
-               (make-error-result 
+               (make-error-result
                 :expression expression
                 :position position
                 :detail last-error))
         (let ((result (eval-expression expr text position end)))
           (if (error-result-p result)
               (when (or (not last-error)
-                        (< (error-result-position last-error) 
+                        (< (error-result-position last-error)
                            (error-result-position result)))
                 (setf last-error result))
               (return result)))))))
@@ -788,15 +792,15 @@ inspection."
     (let ((functions (mapcar #'compile-expression subexprs)))
       (named-lambda compiled-ordered-choise (text position end)
         (let (last-error)
-          (dolist (fun functions 
-                   (make-error-result 
+          (dolist (fun functions
+                   (make-error-result
                     :expression expression
                     :position position
                     :detail last-error))
             (let ((result (funcall fun text position end)))
               (if (error-result-p result)
-                  (when (or (not last-error) 
-                            (< (error-result-position last-error) 
+                  (when (or (not last-error)
+                            (< (error-result-position last-error)
                                (error-result-position result)))
                     (setf last-error result))
                   (return result)))))))))
@@ -810,7 +814,7 @@ inspection."
   (with-expression (expression (* subexpr))
     (let ((function (compile-expression subexpr)))
       (named-lambda compiled-greedy-repetition (text position end)
-        (let ((results 
+        (let ((results
                (loop for result = (funcall function text position end)
                      until (error-result-p result)
                      do (setf position (result-position result))
@@ -868,7 +872,7 @@ inspection."
   (with-expression (expression (& subexpr))
     (let ((result (eval-expression subexpr text position end)))
       (if (error-result-p result)
-          (make-error-result 
+          (make-error-result
            :position position
            :expression expression
            :detail result)
@@ -896,7 +900,7 @@ inspection."
   (with-expression (expression (! subexpr))
     (let ((result (eval-expression subexpr text position end)))
       (if (error-result-p result)
-          (make-result 
+          (make-result
            :position position)
           (make-error-result
            :expression expression
@@ -927,7 +931,7 @@ inspection."
           (let ((production (result-production result)))
             (if (funcall (symbol-function (car expression)) production)
                 result
-                (make-error-result 
+                (make-error-result
                  :position position
                  :expression expression)))))))
 
@@ -937,7 +941,7 @@ inspection."
            (predicate (car expression))
            ;; KLUDGE: Calling via a variable symbol can be slow, and if we
            ;; grab the SYMBOL-FUNCTION here we will not see redefinitions.
-           (semantic-function 
+           (semantic-function
             (if (eq (symbol-package predicate) (load-time-value (find-package :cl)))
                 (symbol-function predicate)
                 (compile nil `(lambda (x) (,predicate x))))))
