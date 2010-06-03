@@ -837,7 +837,7 @@ inspection."
          ;; choise with a single string.
          (let ((choises (apply #'concatenate 'string canonized)))
            (named-lambda compiled-character-choise (text position end)
-             (let ((c (and (<= position end) (find (char text position) choises))))
+             (let ((c (and (< position end) (find (char text position) choises))))
                (if c
                    (make-result :position (+ 1 position)
                                 :production (list (string c)))
