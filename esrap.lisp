@@ -807,15 +807,14 @@ inspection."
     (let ((type :characters)
           (canonized nil))
       (dolist (sub subexprs)
-        (when (typep sub '(or character string))
-          (print (list :sub sub :canon canonized))
+        (when (typep sub '(or character string))        
           (let* ((this (string sub))
                  (len (length this)))
             (unless (some (lambda (seen)
                             (not
                              ;; Check for "FOO" followed by "FOOBAR" -- the
                              ;; latter would never match, but it's an easy mistake to make.
-                             (or (print (mismatch this seen :end1 (min (length seen) len)))
+                             (or (mismatch this seen :end1 (min (length seen) len))
                                  (warn "Prefix ~S before ~S in an ESRAP OR expression."
                                        seen this))))
                         canonized)
