@@ -106,6 +106,7 @@ Catenates all the strings in arguments into a single string."
                (dolist (elt list)
                  (etypecase elt
                    (string (write-string elt s))
+                   (character (write-char elt s))
                    (list (cat-list elt))))))
       (cat-list arguments))))
 
@@ -682,7 +683,13 @@ inspection."
          :position position))))
 
 (defun eval-character (text position end)
-  (exec-string 1 text position end))
+  (if (< position end)
+      (make-result
+       :production (char text position)
+       :position (1+ position))
+      (make-error-result
+       :expression 'character
+       :position position)))
 
 (defun compile-character ()
   #'eval-character)
