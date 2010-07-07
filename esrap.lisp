@@ -839,7 +839,7 @@ inspection."
              (let ((c (and (< position end) (find (char text position) choises))))
                (if c
                    (make-result :position (+ 1 position)
-                                :production (list (string c)))
+                                :production (string c))
                    (make-error-result
                     :expression expression
                     :position position))))))
@@ -856,7 +856,7 @@ inspection."
                  (when (match-terminal-p choise len text position end t)
                    (return
                      (make-result :position (+ len position)
-                                  :production (list choise)))))))))
+                                  :production choise))))))))
         (:general
          ;; In the general case, compile subexpressions and call.
          (let ((functions (mapcar #'compile-expression subexprs)))
