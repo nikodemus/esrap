@@ -7,14 +7,22 @@
 
 (in-package :sexp-grammar)
 
+;;; A couple of semantic predicates.
+
 (defun whitespacep (char)
   (member char '(#\space #\tab #\newline)))
 
-(defun string-charp (char)
+(defun not-doublequote (char)
   (not (eql #\" char)))
+
+;;; Utility rules.
 
 (defrule whitespace (whitespacep character)
   (:constant nil))
+
+(defrule alpha (alphanumericp character))
+
+(defrule string-char (or (not-doublequote character) (and #\\ #\")))
 
 (defrule whitespace* (* whitespace)
   (:constant nil))
@@ -22,29 +30,32 @@
 (defrule whitespace+ (+ whitespace)
   (:constant nil))
 
-(defrule sexp (or list atom))
+;;; Here we go: an S-expression is either a list or an atom, with possibly leading whitespace.
 
-(defrule list (and #\( whitespace* sexp (* (and whitespace+ sexp)) whitespace* #\))
-  (:destructure (p1 w1 car cdrs w2 p2)
-    (declare (ignore p1 p2 w1 w2))
-    (cons car (mapcar #'second cdrs))))
+(defrule sexp (and whitespace* (or list atom))
+  (:destructure (w s)
+     (declare (ignore w))
+     s))
+
+(defrule list (and #\( sexp (* sexp) whitespace* #\))
+  (:destructure (p1 car cdr w p2)
+    (declare (ignore p1 p2 w))
+    (cons car cdr)))
 
 (defrule atom (or string integer symbol))
 
-(defrule string (and #\" (* (or (string-charp character) (and #\\ #\"))) #\")
+(defrule string (and #\" (* string-char) #\")
   (:destructure (q1 string q2)
     (declare (ignore q1 q2))
-    (esrap:concat string)))
+    (concat string)))
 
 (defrule integer (+ (or "0" "1" "2" "3" "4" "5" "6" "7" "8" "9"))
   (:lambda (list)
-    (parse-integer (esrap:concat list) :radix 10)))
+    (parse-integer (concat list) :radix 10)))
 
 (defrule symbol (+ alpha)
   (:lambda (list)
-    (intern (esrap:concat list))))
-
-(defrule alpha (alphanumericp character))
+    (intern (concat list))))
 
 ;;;; Try these
 
@@ -54,6 +65,6 @@
 
 (parse 'sexp "\"foo\"")
 
-(parse 'sexp "(  1 2  3 (FOO \"foo\" 123 )   )")
+(parse 'sexp "  (  1 2  3 (FOO\"foo\"123 )   )")
 
 (describe-grammar 'sexp)
