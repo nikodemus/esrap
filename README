@@ -48,7 +48,9 @@ Syntax overview:
  (! not-followed-by)       -- does not consume
  (<predicate> expr)        -- semantic parsing
 
-Examples:
+ See file example-sexp.lisp for a complete sample grammar and usage.
+
+Trivial examples:
 
  (parse '(or "foo" "bar") "foo")         => "foo", NIL
 
