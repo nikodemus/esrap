@@ -7,37 +7,28 @@
 
 (in-package :sexp-grammar)
 
-;;; A couple of semantic predicates.
-
-(defun whitespacep (char)
-  (member char '(#\space #\tab #\newline)))
+;;; A semantic predicate for filtering out double quotes.
 
 (defun not-doublequote (char)
   (not (eql #\" char)))
 
 ;;; Utility rules.
 
-(defrule whitespace (whitespacep character)
+(defrule whitespace (+ (or #\space #\tab #\newline))
   (:constant nil))
 
-(defrule alpha (alphanumericp character))
+(defrule alphanumeric (alphanumericp character))
 
 (defrule string-char (or (not-doublequote character) (and #\\ #\")))
 
-(defrule whitespace* (* whitespace)
-  (:constant nil))
-
-(defrule whitespace+ (+ whitespace)
-  (:constant nil))
-
 ;;; Here we go: an S-expression is either a list or an atom, with possibly leading whitespace.
 
-(defrule sexp (and whitespace* (or list atom))
+(defrule sexp (and (? whitespace) (or list atom))
   (:destructure (w s)
      (declare (ignore w))
      s))
 
-(defrule list (and #\( sexp (* sexp) whitespace* #\))
+(defrule list (and #\( sexp (* sexp) (? whitespace) #\))
   (:destructure (p1 car cdr w p2)
     (declare (ignore p1 p2 w))
     (cons car cdr)))
@@ -53,7 +44,9 @@
   (:lambda (list)
     (parse-integer (concat list) :radix 10)))
 
-(defrule symbol (+ alpha)
+(defrule symbol (+ alphanumeric)
+  ;; Because ATOM considers INTEGER before a STRING, we know can accept
+  ;; all sequences of alphanumerics -- we already know it isn't an integer.
   (:lambda (list)
     (intern (concat list))))
 
@@ -67,4 +60,4 @@
 
 (parse 'sexp "  (  1 2  3 (FOO\"foo\"123 )   )")
 
-(describe-grammar 'sexp)
+(describe-grammar 'sexp) "foo"
