@@ -1,5 +1,5 @@
 ;;;; ESRAP -- a packrat parser for Common Lisp
-;;;; by Nikodemus Siivola, 2007-2010
+;;;; by Nikodemus Siivola, 2007-2011
 ;;;;
 ;;;; In addition to regular Packrat / Parsing Grammar / TDPL features
 ;;;; ESRAP supports:
