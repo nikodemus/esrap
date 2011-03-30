@@ -23,10 +23,14 @@
 
 ;;; Here we go: an S-expression is either a list or an atom, with possibly leading whitespace.
 
-(defrule sexp (and (? whitespace) (or list atom))
+(defrule sexp (and (? whitespace) (or magic list atom))
   (:destructure (w s)
      (declare (ignore w))
      s))
+
+(defrule magic "foobar"
+  (:constant :magic)
+  (:when (eq * :use-magic)))
 
 (defrule list (and #\( sexp (* sexp) (? whitespace) #\))
   (:destructure (p1 car cdr w p2)
@@ -59,5 +63,10 @@
 (parse 'sexp "\"foo\"")
 
 (parse 'sexp "  (  1 2  3 (FOO\"foo\"123 )   )")
+
+(parse 'sexp "foobar")
+
+(let ((* :use-magic))
+  (parse 'sexp "foobar"))
 
 (describe-grammar 'sexp)
