@@ -1,4 +1,4 @@
-;;;; Copyright (c) 2007-2011 Nikodemus Siivola <nikodemus@sb-studio.net>
+;;;;  Copyright (c) 2007-2011 Nikodemus Siivola <nikodemus@sb-studio.net>
 ;;;;
 ;;;;  Permission is hereby granted, free of charge, to any person
 ;;;;  obtaining a copy of this software and associated documentation files
@@ -22,5 +22,6 @@
   :licence "MIT"
   :depends-on (:alexandria)
   :components ((:file "esrap")
+               (:static-file "example-sexp.lisp")
                (:static-file "README")))
 

@@ -92,13 +92,14 @@
      #:rule
      #:rule-dependencies
      #:remove-rule
+     #:text
      ))
 
 (in-package :esrap)
 
 ;;; Miscellany
 
-(defun concat (&rest arguments)
+(defun text (&rest arguments)
   "Arguments must be strings, or lists whose leaves are strings.
 Catenates all the strings in arguments into a single string."
   (with-output-to-string (s)
@@ -109,6 +110,19 @@ Catenates all the strings in arguments into a single string."
                    (character (write-char elt s))
                    (list (cat-list elt))))))
       (cat-list arguments))))
+
+(setf (symbol-function 'concat) (symbol-function 'text))
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defun note-deprecated (old new)
+    (warn 'simple-style-warning
+          :format-control "~S is deprecated, use ~S instead."
+          :format-arguments (list old new))))
+
+(define-compiler-macro concat (&whole form &rest arguments)
+  (declare (ignore arguments))
+  (note-deprecated 'concat 'text)
+  form)
 
 (deftype nonterminal ()
   "Any symbol except CHARACTER and NIL can be used as a nonterminal symbol."
@@ -401,8 +415,12 @@ symbols."
           (:constant
            (setf transform `(lambda (x) (declare (ignore x)) ,(second option))))
           (:concat
+           (note-deprecated :concat :text)
            (when (second option)
-             (setf transform '#'concat)))
+             (setf transform '#'text)))
+          (:text
+           (when (second option)
+             (setf transform '#'text)))
           (:lambda
            (destructuring-bind (lambda-list &body forms) (cdr option)
              (setf transform `(lambda ,lambda-list ,@forms))))

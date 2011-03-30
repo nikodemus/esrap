@@ -38,17 +38,17 @@
 (defrule string (and #\" (* string-char) #\")
   (:destructure (q1 string q2)
     (declare (ignore q1 q2))
-    (concat string)))
+    (text string)))
 
 (defrule integer (+ (or "0" "1" "2" "3" "4" "5" "6" "7" "8" "9"))
   (:lambda (list)
-    (parse-integer (concat list) :radix 10)))
+    (parse-integer (text list) :radix 10)))
 
 (defrule symbol (+ alphanumeric)
   ;; Because ATOM considers INTEGER before a STRING, we know can accept
   ;; all sequences of alphanumerics -- we already know it isn't an integer.
   (:lambda (list)
-    (intern (concat list))))
+    (intern (text list))))
 
 ;;;; Try these
 
@@ -60,4 +60,4 @@
 
 (parse 'sexp "  (  1 2  3 (FOO\"foo\"123 )   )")
 
-(describe-grammar 'sexp) "foo"
+(describe-grammar 'sexp)
