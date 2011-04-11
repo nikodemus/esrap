@@ -966,7 +966,8 @@ inspection."
                  (dolist (fun functions
                           (make-failed-parse
                            :expression expression
-                           :position (if last-error
+                           :position (if (and last-error
+                                              (failed-parse-p last-error))
                                          (failed-parse-position last-error)
                                          position)
                            :detail last-error))
