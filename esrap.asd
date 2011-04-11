@@ -1,3 +1,5 @@
+;;;;  Copyright (c) 2007-2011 Nikodemus Siivola <nikodemus@sb-studio.net>
+;;;;
 ;;;;  Permission is hereby granted, free of charge, to any person
 ;;;;  obtaining a copy of this software and associated documentation files
 ;;;;  (the "Software"), to deal in the Software without restriction,
@@ -15,5 +17,11 @@
 ;;;;  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 (defsystem :esrap
+  :version "0.9"
+  :description "A Packrat / Parsing Grammar / TDPL parser for Common Lisp."
+  :licence "MIT"
   :depends-on (:alexandria)
-  :components ((:file "esrap")))
+  :components ((:file "esrap")
+               (:static-file "example-sexp.lisp")
+               (:static-file "README")))
+
