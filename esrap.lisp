@@ -897,7 +897,7 @@ inspection."
                                  (< position (failed-parse-position result))))
                         (and last-error
                              (failed-parse-p result)
-                             (or (invative-rule-p last-error)
+                             (or (inactive-rule-p last-error)
                                  (< (failed-parse-position last-error)
                                     (failed-parse-position result)))))
                 (setf last-error result))
@@ -908,7 +908,7 @@ inspection."
     (let ((type :characters)
           (canonized nil))
       (dolist (sub subexprs)
-        (when (typep sub '(or character string))        
+        (when (typep sub '(or character string))
           (let* ((this (string sub))
                  (len (length this)))
             (unless (some (lambda (seen)
