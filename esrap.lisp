@@ -88,6 +88,7 @@
      #:describe-grammar
      #:defrule
      #:find-rule
+     #:modify-rule-expression
      #:parse
      #:rule
      #:rule-dependencies
@@ -508,6 +509,24 @@ symbol."
   (let ((cell (find-rule-cell symbol)))
     (when cell
       (cddr cell))))
+
+(defun modify-rule-expression (symbol expression)
+  "Modify the rule designated by SYMBOL to use EXPRESSION. Signals an
+error if there is not already a rule associated with SYMBOL, or if
+SYMBOL is not a nonterminal symbol."
+  (check-type symbol nonterminal)
+  (let ((cell (find-rule-cell symbol)))
+    (unless cell
+      (error "Tried to modify unknown rule ~S." symbol))
+    (let ((rule (cell-rule cell)))
+      (setf (slot-value rule '%expression)
+            expression)
+      (setf (cell-function cell)
+            (compile-rule symbol
+                          (rule-expression rule)
+                          (rule-condition rule)
+                          (rule-transform rule))))
+    symbol))
 
 (defun remove-rule (symbol &key force)
   "Makes the nonterminal SYMBOL undefined. If the nonterminal is defined an
