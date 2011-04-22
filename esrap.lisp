@@ -91,6 +91,7 @@
      #:parse
      #:rule
      #:rule-dependencies
+     #:rule-expression
      #:remove-rule
      #:text
      ))
@@ -534,6 +535,21 @@ true."
              ;; we can remove the cell.
              (delete-rule-cell symbol)))
       rule)))
+
+(defun (setf rule-expression) (expression rule)
+  "Modify RULE to use EXPRESSION. The rule must be detached
+beforehand."
+  (let ((name (rule-symbol rule)))
+    (when name
+      ;; The reason we complain is twofold:
+      ;; 1. It would be bad to change a rule still in use in a threaded program.
+      ;; 2. No need to worry about compiling the expression.
+      (cerror "Remove and continue, adding the rule back afterwards."
+              "Cannot change the expression of an active rule, remove ~S first.")
+      (remove-rule rule :force t))
+    (setf (slot-value rule '%expression) expression)
+    (when name
+      (add-rule name rule))))
 
 (defun symbol-length (x)
   (length (symbol-name x)))
