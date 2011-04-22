@@ -12,6 +12,10 @@
 (defun not-doublequote (char)
   (not (eql #\" char)))
 
+(defun not-integer (string)
+  (when (find-if-not #'digit-char-p string)
+    t))
+
 ;;; Utility rules.
 
 (defrule whitespace (+ (or #\space #\tab #\newline))
@@ -48,9 +52,10 @@
   (:lambda (list)
     (parse-integer (text list) :radix 10)))
 
-(defrule symbol (+ alphanumeric)
-  ;; Because ATOM considers INTEGER before a STRING, we know can accept
-  ;; all sequences of alphanumerics -- we already know it isn't an integer.
+(defrule symbol (not-integer (+ alphanumeric))
+  ;; NOT-INTEGER is not strictly needed because ATOM considers INTEGER before
+  ;; a STRING, we know can accept all sequences of alphanumerics -- we already
+  ;; know it isn't an integer.
   (:lambda (list)
     (intern (text list))))
 
@@ -70,3 +75,21 @@
   (parse 'sexp "foobar"))
 
 (describe-grammar 'sexp)
+
+(trace-rule 'sexp :recursive t)
+
+(parse 'sexp "(foo bar 1 quux)")
+
+(untrace-rule 'sexp :recursive t)
+
+(defparameter *orig* (rule-expression (find-rule 'sexp)))
+
+(change-rule 'sexp '(and (? whitespace) (or list symbol)))
+
+(parse 'sexp "(foo bar quux)")
+
+(parse 'sexp "(foo bar 1 quux)" :junk-allowed t)
+
+(change-rule 'sexp *orig*)
+
+(parse 'sexp "(foo bar 1 quux)" :junk-allowed t)
