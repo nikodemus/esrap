@@ -14,7 +14,7 @@ wc:
 doc:
 	make -C doc
 
-web:
+web: doc
 	make -C web
 
 gh-pages: web
