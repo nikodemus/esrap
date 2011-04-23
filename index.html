@@ -72,8 +72,7 @@ thesis: &ldquo;Packrat Parsing: a Practical Linear Time Algorithm with Backtrack
 <h2>Table of Contents</h2>
 <ul>
 <li><a name="toc_TOC0" href="#TOC0">1 Parsing Expressions</a>
-<li><a name="toc_TOC11" href="#TOC11">2 Future Changes and Gotchas</a>
-<li><a name="toc_TOC12" href="#TOC12">3 Dictionary</a>
+<li><a name="toc_TOC11" href="#TOC11">2 Dictionary</a>
 </li></ul>
 </div>
 
@@ -119,6 +118,13 @@ consumes whatever the input that expression consumes.
 and an optional transformation rule.
 
    <p>Nonterminals are defined using <code>defrule</code>.
+
+   <p><em>Note: Currently all rules share the same namespace, so you
+should not use symbols in the Common Lisp package or other shared
+packages to name your rules unless you are certain there are no other
+Esrap using components in your Lisp image. In a future version of
+Esrap grammar objects will be introduced to allow multiple definitions
+of nonterminals.</em>
 
 <h3 class="heading"><a name="TOC3"></a>Sequence</h3>
 
@@ -192,24 +198,7 @@ semantic predicate produces whatever the subexpression produces.
    <p><em>Note: semantic predicates may change in the future to produce
 whatever the predicate function returns.</em>
 
-<h2 class="chapter"><a name="TOC11"></a>2 Future Changes and Gotchas</h2>
-
-<p>Some things you should be aware of:
-
-     <ul>
-<li>In the future semantic predicate productions may change to the value
-returned by the predicate. 
-<li>Pseudoterminal <code>character</code> may be renamed <code>t</code>, but if so <code>character</code>
-will be accepted for backwards compatibility for a reasoanble period. 
-<li>Currently all rules share the same namespace, so you should not use symbols in
-the Common Lisp package or other shared packages to name your rules unless you are
-certain there are no other Esrap using component in your Lisp image.
-
-     <p>In the future grammar objects will be introduced to allow multiple
-definitions for nonterminals. 
-</ul>
-
-<h2 class="chapter"><a name="TOC12"></a>3 Dictionary</h2>
+<h2 class="chapter"><a name="TOC11"></a>2 Dictionary</h2>
 
 <p><a name="Macro-defrule"></a>
 
@@ -329,21 +318,28 @@ symbols.
 <blockquote><p><a name="index-g_t_0028setf-rule_002dexpression_0029-20"></a>Modify <code>rule</code> to use <code>expression</code> as the parsing expression. The rule must be
 detached beforehand. 
 </p></blockquote></div>
-   <!-- @include include/fun-esrap-rule-symbol.texinfo -->
+
+   <p><a name="Function-rule_002dsymbol"></a>
+
+<div class="defun">
+&mdash; Function: <b>rule-symbol</b><var> rule<a name="index-rule_002dsymbol-21"></a></var><br>
+<blockquote><p><a name="index-rule_002dsymbol-22"></a>Returns the nonterminal associated with the <code>rule</code>, or <code>nil</code> of the rule
+is not attached to any nonterminal. 
+</p></blockquote></div>
 
    <p><a name="Function-text"></a>
 
 <div class="defun">
-&mdash; Function: <b>text</b><var> &amp;rest arguments<a name="index-text-21"></a></var><br>
-<blockquote><p><a name="index-text-22"></a>Arguments must be strings, or lists whose leaves are strings. 
+&mdash; Function: <b>text</b><var> &amp;rest arguments<a name="index-text-23"></a></var><br>
+<blockquote><p><a name="index-text-24"></a>Arguments must be strings, or lists whose leaves are strings. 
 Catenates all the strings in arguments into a single string. 
 </p></blockquote></div>
 
    <p><a name="Function-trace_002drule"></a>
 
 <div class="defun">
-&mdash; Function: <b>trace-rule</b><var> symbol &amp;key recursive break<a name="index-trace_002drule-23"></a></var><br>
-<blockquote><p><a name="index-trace_002drule-24"></a>Turn on tracing of nonterminal <code>symbol</code>. If <code>recursive</code> is true, turn
+&mdash; Function: <b>trace-rule</b><var> symbol &amp;key recursive break<a name="index-trace_002drule-25"></a></var><br>
+<blockquote><p><a name="index-trace_002drule-26"></a>Turn on tracing of nonterminal <code>symbol</code>. If <code>recursive</code> is true, turn
 on tracing for the whole grammar rooted at <code>symbol</code>. If <code>break</code> is true,
 break is entered when the rule is invoked. 
 </p></blockquote></div>
@@ -351,8 +347,8 @@ break is entered when the rule is invoked.
    <p><a name="Function-untrace_002drule"></a>
 
 <div class="defun">
-&mdash; Function: <b>untrace-rule</b><var> symbol &amp;key recursive<a name="index-untrace_002drule-25"></a></var><br>
-<blockquote><p><a name="index-untrace_002drule-26"></a>Turn off tracing of nonterminal <code>symbol</code>. If <code>recursive</code> is true, untraces the
+&mdash; Function: <b>untrace-rule</b><var> symbol &amp;key recursive<a name="index-untrace_002drule-27"></a></var><br>
+<blockquote><p><a name="index-untrace_002drule-28"></a>Turn off tracing of nonterminal <code>symbol</code>. If <code>recursive</code> is true, untraces the
 whole grammar rooted at <code>symbol</code>. 
 </p></blockquote></div>
 
