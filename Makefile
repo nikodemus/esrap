@@ -21,7 +21,7 @@ gh-pages: web
 	rm -rf web-tmp
 	mv web web-tmp
 	git checkout gh-pages
-	cp web-tmp/* .
+	cp web-tmp/index.html .
 	git commit -a -c master
 	mv web-tmp web
 	git checkout -f master
