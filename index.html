@@ -139,76 +139,75 @@ and an optional transformation rule.
 
 <h3 class="heading"><a name="TOC4"></a>Sequence</h3>
 
-<p>Sequences are specified using expressions of the form <code>(and
-subexpression ...)</code>. A sequence succeeds if all subexpressions
-succeed, and consumes all input consumed by the subexpressions.
-
-   <p>A sequence produces the productions of its subexpressions as a list.
+<pre class="lisp">     (and subexpression ...)
+</pre>
+   <p>A sequence succeeds if all subexpressions succeed, and consumes all
+input consumed by the subexpressions. A sequence produces the
+productions of its subexpressions as a list.
 
 <h3 class="heading"><a name="TOC5"></a>Ordered Choise</h3>
 
-<p>Ordered choises are specified using expressions of the form <code>(or
-subexpressions ...)</code>. An ordered choise succeeds if any of the
-subexpressions succeeds, and consumes all the input consumed by the
-successful subexpression.
-
-   <p>An ordered choise produces whatever the successful subexpression
+<pre class="lisp">     (or subexpression ...)
+</pre>
+   <p>An ordered choise succeeds if any of the subexpressions succeeds, and
+consumes all the input consumed by the successful subexpression. An
+ordered choise produces whatever the successful subexpression
 produces.
 
 <h3 class="heading"><a name="TOC6"></a>Greedy Repetition</h3>
 
-<p>Greedy repetitions are specified using expressions of the form
-<code>(* subexpresssion)</code>. A greedy repetition always succeeds,
-consuming all input consumed by applying subexpression
-repeatedly as long as it succeeds.
+<pre class="lisp">     (* subexpresssion)
+</pre>
+   <p>A greedy repetition always succeeds, consuming all input consumed by
+applying subexpression repeatedly as long as it succeeds.
 
    <p>A greedy repetition produces the productions of the subexpression as a
 list.
 
 <h3 class="heading"><a name="TOC7"></a>Greedy Positive Repetition</h3>
 
-<p>Greedy positive repetitions are specified using expressions of the
-form <code>(+ subexpresssion)</code>. A greedy repetition succeeds if
-subexpression succeeds at least once, and consumes all input consumed
-by applying subexpression repeatedly as long as it succeeds.
-
-   <p>A greedy positive repetition produces the productions of the
-subexpression as a list.
+<pre class="lisp">     (+ subexpresssion)
+</pre>
+   <p>A greedy repetition succeeds if subexpression succeeds at least once,
+and consumes all input consumed by applying subexpression repeatedly
+as long as it succeeds. A greedy positive repetition produces the
+productions of the subexpression as a list.
 
 <h3 class="heading"><a name="TOC8"></a>Optional</h3>
 
-<p>Optionals are specified using expressions of the form <code>(? 
-subexpression)</code>. Optionals always succeed, and consume whatever input
-the subexpression consumes.
-
-   <p>An optional produces whatever the subexpression produces, or
+<pre class="lisp">     (? subexpression)
+</pre>
+   <p>Optionals always succeed, and consume whatever input the subexpression
+consumes. An optional produces whatever the subexpression produces, or
 <code>nil</code> if the subexpression does not succeed.
 
 <h3 class="heading"><a name="TOC9"></a>Followed-By Predicate</h3>
 
-<p>Followed-by predicates are specified using expressions of the form
-<code>(&amp; subexpression)</code>. A followed-by predicate succeeds if the
-subexpression succeeds, and <em>consumes no input</em>.
-
-   <p>A followed-by predicate produces whatever the subexpression produces.
+<pre class="lisp">     (&amp; subexpression)
+</pre>
+   <p>A followed-by predicate succeeds if the subexpression succeeds, and
+<em>consumes no input</em>. A followed-by predicate produces whatever
+the subexpression produces.
 
 <h3 class="heading"><a name="TOC10"></a>Not-Followed-By Predicate</h3>
 
-<p>Not-followed-by predicates are specified using expressions of the form
-<code>(! subexpression)</code>. A not-followed-by predicate succeeds if the
-subexpression does not succeed, and <em>consumes no input</em>.
-
-   <p>A not-followed-by predicate produces <code>nil</code>.
+<pre class="lisp">     (! subexpression)
+</pre>
+   <p>A not-followed-by predicate succeeds if the subexpression does not
+succeed, and <em>consumes no input</em>. A not-followed-by predicate
+produces <code>nil</code>.
 
 <h3 class="heading"><a name="TOC11"></a>Semantic Predicates</h3>
 
-<p>Semantic predicates are specified using expressions of the form
-<code>(predicate subexpression)</code> where <code>predicate</code> is any symbol
-naming a global function. A semantic predicate succeeds if subsexpression
-succeeds <em>and</em> <code>predicate</code> returns true for the production of
-the subexpression.
+<pre class="lisp">     (predicate-name subexpression)
+</pre>
+   <p>The <code>predicate-name</code> is a symbol naming a global function. A
+semantic predicate succeeds if subsexpression succeeds <em>and</em> the
+named function returns true for the production of the subexpression. A
+semantic predicate produces whatever the subexpression produces.
 
-   <p>A semantic predicate produces whatever the subexpression produces.
+   <p><em>Note: semantic predicates may change in the future to produce
+whatever the predicate function returns.</em>
 
 <h2 class="chapter"><a name="TOC12"></a>3 Dictionary</h2>
 
