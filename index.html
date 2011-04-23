@@ -71,30 +71,13 @@ thesis: &ldquo;Packrat Parsing: a Practical Linear Time Algorithm with Backtrack
    <div class="contents">
 <h2>Table of Contents</h2>
 <ul>
-<li><a name="toc_TOC0" href="#TOC0">1 Future Changes and Gotchas</a>
-<li><a name="toc_TOC1" href="#TOC1">2 Parsing Expressions</a>
+<li><a name="toc_TOC0" href="#TOC0">1 Parsing Expressions</a>
+<li><a name="toc_TOC11" href="#TOC11">2 Future Changes and Gotchas</a>
 <li><a name="toc_TOC12" href="#TOC12">3 Dictionary</a>
 </li></ul>
 </div>
 
-<h2 class="chapter"><a name="TOC0"></a>1 Future Changes and Gotchas</h2>
-
-<p>Some things you should be aware of:
-
-     <ul>
-<li>In the future semantic predicate productions may change to the value
-returned by the predicate. 
-<li>Pseudoterminal <code>character</code> may be renamed <code>t</code>, but if so <code>character</code>
-will be accepted for backwards compatibility for a reasoanble period. 
-<li>Currently all rules share the same namespace, so you should not use symbols in
-the Common Lisp package or other shared packages to name your rules unless you are
-certain there are no other Esrap using component in your Lisp image.
-
-     <p>In the future grammar objects will be introduced to allow multiple
-definitions for nonterminals. 
-</ul>
-
-<h2 class="chapter"><a name="TOC1"></a>2 Parsing Expressions</h2>
+<h2 class="chapter"><a name="TOC0"></a>1 Parsing Expressions</h2>
 
 <p>Parsing proceeds by matching text against parsing expressions. 
 Matching has three components: success vs failure, consumption of
@@ -105,7 +88,7 @@ that succeed may or may not consume input.
 
    <p>A parsing expressions can be:
 
-<h3 class="heading"><a name="TOC2"></a>Terminal</h3>
+<h3 class="heading"><a name="TOC1"></a>Terminal</h3>
 
 <p>A terminal is a character or a string of length one, which succeeds and
 consumes a single character if that character matches the terminal.
@@ -126,7 +109,7 @@ and consumes input as if <code>(and character character)</code>.
    <p>Both normal terminals and pseudoterminals produce the consumed input
 as a string.
 
-<h3 class="heading"><a name="TOC3"></a>Nonterminal</h3>
+<h3 class="heading"><a name="TOC2"></a>Nonterminal</h3>
 
 <p>Nonterminals are specified using symbols. A nonterminal symbol
 succeeds if the parsing expression associated with it succeeds, and
@@ -137,7 +120,7 @@ and an optional transformation rule.
 
    <p>Nonterminals are defined using <code>defrule</code>.
 
-<h3 class="heading"><a name="TOC4"></a>Sequence</h3>
+<h3 class="heading"><a name="TOC3"></a>Sequence</h3>
 
 <pre class="lisp">     (and subexpression ...)
 </pre>
@@ -145,16 +128,16 @@ and an optional transformation rule.
 input consumed by the subexpressions. A sequence produces the
 productions of its subexpressions as a list.
 
-<h3 class="heading"><a name="TOC5"></a>Ordered Choise</h3>
+<h3 class="heading"><a name="TOC4"></a>Ordered Choice</h3>
 
 <pre class="lisp">     (or subexpression ...)
 </pre>
-   <p>An ordered choise succeeds if any of the subexpressions succeeds, and
+   <p>An ordered choice succeeds if any of the subexpressions succeeds, and
 consumes all the input consumed by the successful subexpression. An
-ordered choise produces whatever the successful subexpression
+ordered choice produces whatever the successful subexpression
 produces.
 
-<h3 class="heading"><a name="TOC6"></a>Greedy Repetition</h3>
+<h3 class="heading"><a name="TOC5"></a>Greedy Repetition</h3>
 
 <pre class="lisp">     (* subexpresssion)
 </pre>
@@ -164,7 +147,7 @@ applying subexpression repeatedly as long as it succeeds.
    <p>A greedy repetition produces the productions of the subexpression as a
 list.
 
-<h3 class="heading"><a name="TOC7"></a>Greedy Positive Repetition</h3>
+<h3 class="heading"><a name="TOC6"></a>Greedy Positive Repetition</h3>
 
 <pre class="lisp">     (+ subexpresssion)
 </pre>
@@ -173,7 +156,7 @@ and consumes all input consumed by applying subexpression repeatedly
 as long as it succeeds. A greedy positive repetition produces the
 productions of the subexpression as a list.
 
-<h3 class="heading"><a name="TOC8"></a>Optional</h3>
+<h3 class="heading"><a name="TOC7"></a>Optional</h3>
 
 <pre class="lisp">     (? subexpression)
 </pre>
@@ -181,7 +164,7 @@ productions of the subexpression as a list.
 consumes. An optional produces whatever the subexpression produces, or
 <code>nil</code> if the subexpression does not succeed.
 
-<h3 class="heading"><a name="TOC9"></a>Followed-By Predicate</h3>
+<h3 class="heading"><a name="TOC8"></a>Followed-By Predicate</h3>
 
 <pre class="lisp">     (&amp; subexpression)
 </pre>
@@ -189,7 +172,7 @@ consumes. An optional produces whatever the subexpression produces, or
 <em>consumes no input</em>. A followed-by predicate produces whatever
 the subexpression produces.
 
-<h3 class="heading"><a name="TOC10"></a>Not-Followed-By Predicate</h3>
+<h3 class="heading"><a name="TOC9"></a>Not-Followed-By Predicate</h3>
 
 <pre class="lisp">     (! subexpression)
 </pre>
@@ -197,7 +180,7 @@ the subexpression produces.
 succeed, and <em>consumes no input</em>. A not-followed-by predicate
 produces <code>nil</code>.
 
-<h3 class="heading"><a name="TOC11"></a>Semantic Predicates</h3>
+<h3 class="heading"><a name="TOC10"></a>Semantic Predicates</h3>
 
 <pre class="lisp">     (predicate-name subexpression)
 </pre>
@@ -208,6 +191,23 @@ semantic predicate produces whatever the subexpression produces.
 
    <p><em>Note: semantic predicates may change in the future to produce
 whatever the predicate function returns.</em>
+
+<h2 class="chapter"><a name="TOC11"></a>2 Future Changes and Gotchas</h2>
+
+<p>Some things you should be aware of:
+
+     <ul>
+<li>In the future semantic predicate productions may change to the value
+returned by the predicate. 
+<li>Pseudoterminal <code>character</code> may be renamed <code>t</code>, but if so <code>character</code>
+will be accepted for backwards compatibility for a reasoanble period. 
+<li>Currently all rules share the same namespace, so you should not use symbols in
+the Common Lisp package or other shared packages to name your rules unless you are
+certain there are no other Esrap using component in your Lisp image.
+
+     <p>In the future grammar objects will be introduced to allow multiple
+definitions for nonterminals. 
+</ul>
 
 <h2 class="chapter"><a name="TOC12"></a>3 Dictionary</h2>
 
