@@ -89,16 +89,17 @@
   (:export
    #:! #:? #:+ #:* #:& #:~
    #:add-rule
-   #:concat
    #:change-rule
-   #:describe-grammar
+   #:concat
    #:defrule
+   #:describe-grammar
    #:find-rule
    #:parse
+   #:remove-rule
    #:rule
    #:rule-dependencies
    #:rule-expression
-   #:remove-rule
+   #:rule-symbol
    #:text
    #:trace-rule
    #:untrace-rule
