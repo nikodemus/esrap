@@ -1,0 +1,200 @@
+\input texinfo   @c -*-texinfo-*-
+@c %**start of header
+@setfilename esrap.info
+@settitle Esrap
+@c %**end of header
+
+@settitle Esrap
+
+@c for install-info
+@dircategory Software development
+@direntry
+* Esrap:           a packrat parser for Common Lisp
+@end direntry
+
+@titlepage
+
+@title Esrap
+@subtitle a packrat parser for Common Lisp
+
+@c The following two commands start the copyright page.
+@page
+@vskip 0pt plus 1filll
+@insertcopying
+
+@end titlepage
+
+In addition to regular Packrat / Parsing Grammar / TDPL features Esrap
+supports dynamic redefinition of nonterminals, inline grammars,
+semantic predicates, and include introspecive facilities for
+development.
+
+Esrap is maintained courtesy of @url{http://sb-studio.net/, Steel Bank
+Studio Ltd} by @email{nikodemus@@sb-studio.net, Nikodemus Siivola}.
+
+Esrap is maintained in Git:
+@example
+git clone git://github.com/nikodemus/esrap.git
+@end example
+will get you a local copy.
+@example
+@url{http://github.com/nikodemus/esrap}
+@end example
+is the GitHub project page.
+
+@contents
+
+@ifnottex
+
+@include include/ifnottex.texinfo
+
+@end ifnottex
+
+@chapter Future Changes and Gotchas
+
+Some things you should be aware of:
+
+@itemize
+@item
+In the future semantic predicate productions may change to the value
+returned by the predicate.
+@item
+Pseudoterminal @code{character} may be renamed @code{t}, but if so @code{character}
+will be accepted for backwards compatibility for a reasoanble period.
+@item
+Currently all rules share the same namespace, so you should not use symbols in
+the Common Lisp package or other shared packages to name your rules unless you are
+certain there are no other Esrap using component in your Lisp image.
+
+In the future grammar objects will be introduced to allow multiple
+definitions for nonterminals.
+@end itemize
+
+@chapter Parsing Expressions
+
+Parsing proceeds by matching text against parsing expressions.
+Matching has three components: success vs failure, consumption of
+input, and associated production.
+
+Parsing expressions that fail never consume input. Parsing expressions
+that succeed may or may not consume input.
+
+A parsing expressions can be:
+
+@heading Terminal
+A terminal is a character or a string of length one, which succeeds and
+consumes a single character if that character matches the terminal.
+
+Additionally, Esrap supports some pseudoterminals.
+
+@itemize
+@item
+The wild terminal symbol @code{character}, which always succeeds and
+consumes a single character.
+@item
+Multicharacter strings can be used to specify sequences of terminals:
+@code{"foo"} succeeds and consumes input as if @code{(and #\f #\o
+#\o)}.
+@item
+Expressions of the form @code{(string length)} can be used
+to specify sequences of arbitrary characters: @code{(string 2)} succeeds
+and consumes input as if @code{(and character character)}.
+@end itemize
+
+Both normal terminals and pseudoterminals produce the consumed input
+as a string.
+
+@heading Nonterminal
+Nonterminals are specified using symbols. A nonterminal symbol
+succeeds if the parsing expression associated with it succeeds, and
+consumes whatever the input that expression consumes.
+
+The production of a nonterminal depends on the associated expression
+and an optional transformation rule.
+
+Nonterminals are defined using @code{defrule}.
+
+@heading Sequence
+Sequences are specified using expressions of the form @code{(and
+subexpression ...)}. A sequence succeeds if all subexpressions
+succeed, and consumes all input consumed by the subexpressions.
+
+A sequence produces the productions of its subexpressions as a list.
+
+@heading Ordered Choise
+Ordered choises are specified using expressions of the form @code{(or
+subexpressions ...)}. An ordered choise succeeds if any of the
+subexpressions succeeds, and consumes all the input consumed by the
+successful subexpression.
+
+An ordered choise produces whatever the successful subexpression
+produces.
+
+@heading Greedy Repetition
+Greedy repetitions are specified using expressions of the form
+@code{(* subexpresssion)}. A greedy repetition always succeeds,
+consuming all input consumed by applying subexpression
+repeatedly as long as it succeeds.
+
+A greedy repetition produces the productions of the subexpression as a
+list.
+
+@heading Greedy Positive Repetition
+Greedy positive repetitions are specified using expressions of the
+form @code{(+ subexpresssion)}. A greedy repetition succeeds if
+subexpression succeeds at least once, and consumes all input consumed
+by applying subexpression repeatedly as long as it succeeds.
+
+A greedy positive repetition produces the productions of the
+subexpression as a list.
+
+@heading Optional
+Optionals are specified using expressions of the form @code{(?
+subexpression)}. Optionals always succeed, and consume whatever input
+the subexpression consumes.
+
+An optional produces whatever the subexpression produces, or
+@code{nil} if the subexpression does not succeed.
+
+@heading Followed-By Predicate
+Followed-by predicates are specified using expressions of the form
+@code{(& subexpression)}. A followed-by predicate succeeds if the
+subexpression succeeds, and @emph{consumes no input}.
+
+A followed-by predicate produces whatever the subexpression produces.
+
+@heading Not-Followed-By Predicate
+Not-followed-by predicates are specified using expressions of the form
+@code{(! subexpression)}. A not-followed-by predicate succeeds if the
+subexpression does not succeed, and @emph{consumes no input}.
+
+A not-followed-by predicate produces @code{nil}.
+
+@heading Semantic Predicates
+Semantic predicates are specified using expressions of the form
+@code{(predicate subexpression)} where @code{predicate} is any symbol
+naming a global function. A semantic predicate succeeds if subsexpression
+succeeds @emph{and} @code{predicate} returns true for the production of
+the subexpression.
+
+A semantic predicate produces whatever the subexpression produces.
+
+@chapter Dictionary
+
+@include include/macro-esrap-defrule.texinfo
+
+@include include/fun-esrap-add-rule.texinfo
+@include include/fun-esrap-change-rule.texinfo
+@include include/fun-esrap-describe-grammar.texinfo
+@include include/fun-esrap-find-rule.texinfo
+@include include/fun-esrap-parse.texinfo
+@include include/fun-esrap-remove-rule.texinfo
+@include include/fun-esrap-rule-dependencies.texinfo
+@include include/fun-esrap-rule-expression.texinfo
+@include include/fun-esrap-setf-rule-expression.texinfo
+@c @include include/fun-esrap-rule-symbol.texinfo
+@include include/fun-esrap-text.texinfo
+@include include/fun-esrap-trace-rule.texinfo
+@include include/fun-esrap-untrace-rule.texinfo
+
+@bye

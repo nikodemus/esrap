@@ -214,8 +214,7 @@ and expressions of the form \(~ <literal>) denote case-insensitive terminals."
     :reader rule-symbol)
    (%expression
     :initarg :expression
-    :initform (required-argument :expression)
-    :reader rule-expression)
+    :initform (required-argument :expression))
    (%guard-expression
     :initarg :guard-expression
     :initform t
@@ -375,6 +374,8 @@ symbols."
 ;;; MAIN INTERFACE
 
 (defun parse (expression text &key (start 0) end junk-allowed)
+  "Parses TEXT using EXPRESSION from START to END. Incomplete parses
+are allowed only if JUNK-ALLOWED is true."
   ;; There is no backtracking in the toplevel expression -- so there's
   ;; no point in compiling it as it will be executed only once -- unless
   ;; it's a constant, for which we have a compiler-macro.
@@ -437,6 +438,44 @@ symbols."
                       (error "Incomplete parse, stopped at ~S." position)))))))
 
 (defmacro defrule (&whole form symbol expression &body options)
+  "Define SYMBOL as a nonterminal, using EXPRESSION as associated the parsing expression.
+
+Following OPTIONS can be specified:
+
+  * (:WHEN TEST)
+
+    The rule is active only when TEST evaluates to true. This can be used
+    to specify optional extensions to a grammar.
+
+  * (:CONSTANT CONSTANT)
+
+    No matter what input is consumed or what EXPRESSION produces, the production
+    of the rule is always CONSTANT.
+
+  * (:FUNCTION FUNCTION)
+
+    If provided the production of the expression is transformed using
+    FUNCTION. FUNCTION can be a function name or a lambda-expression.
+
+  * (:IDENTITY BOOLEAN)
+
+    If true, the production of expression is used as-is, as if (:FUNCTION IDENTITY)
+    has been specified. If no production option is specified, this is the default.
+
+  * (:TEXT BOOLEAN)
+
+    If true, the production of expression is flattened and concatenated into a string
+    as if by (:FUNCTION TEXT) has been specified.
+
+  * (:LAMBDA LAMBDA-LIST &BODY BODY)
+
+    If provided, same as using the corresponding lambda-expression with :FUNCTION.
+
+  * (:DESTRUCTURE DESTRUCTURING-LAMBDA-LIST &BODY BODY)
+
+    If provided, same as using a lambda-expression that destructures its argument
+    using DESTRUCTURING-BIND and the provided lambda-list with :FUNCTION.
+"
   (let ((transform nil)
         (guard t)
         (condition t)
@@ -464,7 +503,7 @@ symbols."
                        (set-guard expr nil))
                    (set-guard expr `(lambda () ,expr)))))
             ((:constant)
-             (setf transform `(lambda (x) (declare (ignore x)) ,(second option))))
+             (setf transform `(constantly ,(second options))))
             ((:concat)
              (note-deprecated :concat :text)
              (when (second option)
@@ -491,7 +530,7 @@ symbols."
        (add-rule ',symbol (make-instance 'rule
                                          :expression ',expression
                                          :guard-expression ',guard
-                                         :transform ,transform
+                                         :transform ,(or transform '#'identity)
                                          :condition ,condition)))))
 
 (defun add-rule (symbol rule)
@@ -600,8 +639,8 @@ break is entered when the rule is invoked."
       t)))
 
 (defun untrace-rule (symbol &key recursive)
-  "Turn off tracing of nonterminal SYMBOL. If SYMBOL was traced recursively,
-untraces the entire grammar rooted at the symbol."
+  "Turn off tracing of nonterminal SYMBOL. If RECURSIVE is true, untraces the
+whole grammar rooted at SYMBOL."
   (unless (member symbol *trace-stack* :test #'eq)
     (let ((cell (find-rule-cell symbol)))
       (unless cell
@@ -616,9 +655,13 @@ untraces the entire grammar rooted at the symbol."
               (untrace-rule dep :recursive t))))))
     nil))
 
+(defun rule-expression (rule)
+  "Return the parsing expression associated with the RULE."
+  (slot-value rule '%expression))
+
 (defun (setf rule-expression) (expression rule)
-  "Modify RULE to use EXPRESSION. The rule must be detached
-beforehand."
+  "Modify RULE to use EXPRESSION as the parsing expression. The rule must be
+detached beforehand."
   (let ((name (rule-symbol rule)))
     (when name
       (error "~@<Cannot change the expression of an active rule, ~
