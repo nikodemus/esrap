@@ -56,26 +56,6 @@ thesis: ``Packrat Parsing: a Practical Linear Time Algorithm with Backtracking''
 
 @end ifnottex
 
-@chapter Future Changes and Gotchas
-
-Some things you should be aware of:
-
-@itemize
-@item
-In the future semantic predicate productions may change to the value
-returned by the predicate.
-@item
-Pseudoterminal @code{character} may be renamed @code{t}, but if so @code{character}
-will be accepted for backwards compatibility for a reasoanble period.
-@item
-Currently all rules share the same namespace, so you should not use symbols in
-the Common Lisp package or other shared packages to name your rules unless you are
-certain there are no other Esrap using component in your Lisp image.
-
-In the future grammar objects will be introduced to allow multiple
-definitions for nonterminals.
-@end itemize
-
 @chapter Parsing Expressions
 
 Parsing proceeds by matching text against parsing expressions.
@@ -129,14 +109,14 @@ A sequence succeeds if all subexpressions succeed, and consumes all
 input consumed by the subexpressions. A sequence produces the
 productions of its subexpressions as a list.
 
-@heading Ordered Choise
+@heading Ordered Choice
 @lisp
 (or subexpression ...)
 @end lisp
 
-An ordered choise succeeds if any of the subexpressions succeeds, and
+An ordered choice succeeds if any of the subexpressions succeeds, and
 consumes all the input consumed by the successful subexpression. An
-ordered choise produces whatever the successful subexpression
+ordered choice produces whatever the successful subexpression
 produces.
 
 @heading Greedy Repetition
@@ -199,6 +179,26 @@ semantic predicate produces whatever the subexpression produces.
 
 @emph{Note: semantic predicates may change in the future to produce
 whatever the predicate function returns.}
+
+@chapter Future Changes and Gotchas
+
+Some things you should be aware of:
+
+@itemize
+@item
+In the future semantic predicate productions may change to the value
+returned by the predicate.
+@item
+Pseudoterminal @code{character} may be renamed @code{t}, but if so @code{character}
+will be accepted for backwards compatibility for a reasoanble period.
+@item
+Currently all rules share the same namespace, so you should not use symbols in
+the Common Lisp package or other shared packages to name your rules unless you are
+certain there are no other Esrap using component in your Lisp image.
+
+In the future grammar objects will be introduced to allow multiple
+definitions for nonterminals.
+@end itemize
 
 @chapter Dictionary
 
