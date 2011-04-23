@@ -42,6 +42,12 @@ will get you a local copy.
 @end example
 is the GitHub project page.
 
+Esrap is licenced under an MIT-style licence.
+
+For more on packrat parsing, see
+@url{http://pdos.csail.mit.edu/~baford/packrat/thesis/} for Bryan Ford's 2002
+thesis: ``Packrat Parsing: a Practical Linear Time Algorithm with Backtracking''.
+
 @contents
 
 @ifnottex
