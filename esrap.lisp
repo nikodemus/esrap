@@ -210,8 +210,7 @@ and expressions of the form \(~ <literal>) denote case-insensitive terminals."
 
 (defclass rule ()
   ((%symbol
-    :initform nil
-    :reader rule-symbol)
+    :initform nil)
    (%expression
     :initarg :expression
     :initform (required-argument :expression))
@@ -230,6 +229,11 @@ and expressions of the form \(~ <literal>) denote case-insensitive terminals."
     :initarg :transform
     :initform nil
     :reader rule-transform)))
+
+(defun rule-symbol (rule)
+  "Returns the nonterminal associated with the RULE, or NIL of the rule
+is not attached to any nonterminal."
+  (slot-value rule '%symbol))
 
 (defun detach-rule (rule)
   (dolist (dep (%rule-direct-dependencies rule))

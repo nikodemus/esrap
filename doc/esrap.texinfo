@@ -100,6 +100,13 @@ and an optional transformation rule.
 
 Nonterminals are defined using @code{defrule}.
 
+@emph{Note: Currently all rules share the same namespace, so you
+should not use symbols in the Common Lisp package or other shared
+packages to name your rules unless you are certain there are no other
+Esrap using components in your Lisp image. In a future version of
+Esrap grammar objects will be introduced to allow multiple definitions
+of nonterminals.}
+
 @heading Sequence
 @lisp
 (and subexpression ...)
@@ -180,26 +187,6 @@ semantic predicate produces whatever the subexpression produces.
 @emph{Note: semantic predicates may change in the future to produce
 whatever the predicate function returns.}
 
-@chapter Future Changes and Gotchas
-
-Some things you should be aware of:
-
-@itemize
-@item
-In the future semantic predicate productions may change to the value
-returned by the predicate.
-@item
-Pseudoterminal @code{character} may be renamed @code{t}, but if so @code{character}
-will be accepted for backwards compatibility for a reasoanble period.
-@item
-Currently all rules share the same namespace, so you should not use symbols in
-the Common Lisp package or other shared packages to name your rules unless you are
-certain there are no other Esrap using component in your Lisp image.
-
-In the future grammar objects will be introduced to allow multiple
-definitions for nonterminals.
-@end itemize
-
 @chapter Dictionary
 
 @include include/macro-esrap-defrule.texinfo
@@ -213,7 +200,7 @@ definitions for nonterminals.
 @include include/fun-esrap-rule-dependencies.texinfo
 @include include/fun-esrap-rule-expression.texinfo
 @include include/fun-esrap-setf-rule-expression.texinfo
-@c @include include/fun-esrap-rule-symbol.texinfo
+@include include/fun-esrap-rule-symbol.texinfo
 @include include/fun-esrap-text.texinfo
 @include include/fun-esrap-trace-rule.texinfo
 @include include/fun-esrap-untrace-rule.texinfo
