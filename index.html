@@ -143,6 +143,9 @@ consumes all the input consumed by the successful subexpression. An
 ordered choice produces whatever the successful subexpression
 produces.
 
+   <p>Subexpressions are checked strictly in the specified order, and once
+a subexpression succeeds no furhter ones will be tried.
+
 <h3 class="heading"><a name="TOC5"></a>Greedy Repetition</h3>
 
 <pre class="lisp">     (* subexpresssion)
