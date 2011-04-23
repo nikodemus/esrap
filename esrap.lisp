@@ -7,7 +7,7 @@
 ;;;;  - dynamic redefinition of nonterminals
 ;;;;  - inline grammars
 ;;;;  - semantic predicates
-;;;;  - introspective facilities
+;;;;  - introspective facilities (decribing grammars, tracing, setting breaks)
 ;;;;
 ;;;; References:
 ;;;;
@@ -69,7 +69,6 @@
 ;;;;
 ;;;; TODO:
 ;;;;  - character classes
-;;;;  - setting breaks on rules
 ;;;;  - proper tests
 ;;;;  - states
 ;;;;  - documentation
@@ -78,26 +77,32 @@
 ;;;;                       :transform-subseq #'parse-integer)
 ;;;;  - optimizing single-character alternatives: store in a string,
 ;;;;    not in a list.
+;;;;  - implement a faster cache
+;;;;  - grammar objects so that there can be multiple definitions
+;;;;    for symbols such as IF without conflict
+;;;;  - thread safety
 
 (defpackage :esrap
-    (:use :cl :alexandria)
-    (:export
-     #:! #:? #:+ #:* #:& #:~
-     #:add-rule
-     #:concat
-     #:change-rule
-     #:describe-grammar
-     #:defrule
-     #:find-rule
-     #:parse
-     #:rule
-     #:rule-dependencies
-     #:rule-expression
-     #:remove-rule
-     #:text
-     #:trace-rule
-     #:untrace-rule
-     ))
+  (:use :cl :alexandria)
+  #+sbcl
+  (:lock t)
+  (:export
+   #:! #:? #:+ #:* #:& #:~
+   #:add-rule
+   #:concat
+   #:change-rule
+   #:describe-grammar
+   #:defrule
+   #:find-rule
+   #:parse
+   #:rule
+   #:rule-dependencies
+   #:rule-expression
+   #:remove-rule
+   #:text
+   #:trace-rule
+   #:untrace-rule
+   ))
 
 (in-package :esrap)
 
@@ -157,8 +162,7 @@ and expressions of the form \(~ <literal>) denote case-insensitive terminals."
                       (:conc-name cell-))
   (%info (required-argument) :type (cons function t))
   (trace-info nil)
-  (referents nil :type list)
-  (plist nil :type list))
+  (referents nil :type list))
 
 (declaim (inline cell-function))
 (defun cell-function (cell)

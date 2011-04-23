@@ -6,7 +6,7 @@ supports:
  - dynamic redefinition of nonterminals
  - inline grammars
  - semantic predicates
- - introspective facilities
+ - introspective facilities (decribing grammars, tracing, setting breaks)
 
 References:
 
