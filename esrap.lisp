@@ -1,13 +1,9 @@
 ;;;; ESRAP -- a packrat parser for Common Lisp
 ;;;; by Nikodemus Siivola, 2007-2011
 ;;;;
-;;;; In addition to regular Packrat / Parsing Grammar / TDPL features
-;;;; ESRAP supports:
+;;;; Homepage and documentation:
 ;;;;
-;;;;  - dynamic redefinition of nonterminals
-;;;;  - inline grammars
-;;;;  - semantic predicates
-;;;;  - introspective facilities (decribing grammars, tracing, setting breaks)
+;;;;   http://nikodemus.github.com/esrap/
 ;;;;
 ;;;; References:
 ;;;;
@@ -32,55 +28,6 @@
 ;;;;  CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
 ;;;;  TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 ;;;;  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-;;;;
-;;;; Syntax overview:
-;;;;
-;;;;  <literal>                 -- case-sensitive terminal
-;;;;  (~ <literal>)             -- case-insensitive terminal
-;;;;  character                 -- any single character
-;;;;  (string length)           -- any string of length
-;;;;  (and &rest sequence)
-;;;;  (or &rest ordered-choises)
-;;;;  (* greedy-repetition)
-;;;;  (+ greedy-positive-repetition)
-;;;;  (? optional)
-;;;;  (& followed-by)           -- does not consume
-;;;;  (! not-followed-by)       -- does not consume
-;;;;  (<predicate> expr)        -- semantic parsing
-;;;;
-;;;; Examples:
-;;;;
-;;;;  (parse '(or "foo" "bar") "foo")         => "foo", NIL
-;;;;
-;;;;  (add-rule 'foo+ (make-instance 'rule :expression '(+ "foo"))) => FOO+
-;;;;
-;;;;  (parse 'foo+ "foofoofoo")               => ("foo" "foo" "foo"), NIL
-;;;;
-;;;;  (add-rule 'decimal
-;;;;            (make-instance 'rule
-;;;;             :expression '(+ (or "0" "1" "2" "3" "4" "5" "6" "7" "8" "9"))
-;;;;             :transform (lambda (list)
-;;;;                          (parse-integer (format nil "~{~A~}" list)))))
-;;;;   => DECIMAL
-;;;;
-;;;;  (parse '(oddp decimal) "123")                  => 123
-;;;;
-;;;;  (parse '(evenp decimal) "123" :junk-allowed t) => NIL, 0
-;;;;
-;;;; TODO:
-;;;;  - character classes
-;;;;  - proper tests
-;;;;  - states
-;;;;  - documentation
-;;;;  - transform-production vs. transform-subseq:
-;;;;    (add-rule 'decimal :expression '(+ (or "0" "1" ...))
-;;;;                       :transform-subseq #'parse-integer)
-;;;;  - optimizing single-character alternatives: store in a string,
-;;;;    not in a list.
-;;;;  - implement a faster cache
-;;;;  - grammar objects so that there can be multiple definitions
-;;;;    for symbols such as IF without conflict
-;;;;  - thread safety
 
 (defpackage :esrap
   (:use :cl :alexandria)

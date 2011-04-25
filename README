@@ -8,6 +8,10 @@ supports:
  - semantic predicates
  - introspective facilities (decribing grammars, tracing, setting breaks)
 
+Homepage & Documentation:
+
+  http://nikodemus.github.com/esrap/
+
 References:
 
   * Bryan Ford, 2002, "Packrat Parsing: a Practical Linear Time
