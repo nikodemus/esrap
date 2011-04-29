@@ -1,0 +1,78 @@
+Esrap TODO
+* Optimizations
+*** Error vs Success results
+    We're interested in the production/failure, and the position.
+
+    The vast majority of parses result in failures, and we cons up
+    a FAILED-PARSE for each. Unless the whole parse fails, the only
+    thing we are interested in is the position.
+
+    ...and even if the whole parse fails, we use the additional
+    information only to display a fancy error message.
+    
+    So: unless PARSE has been called with :DEBUG T, use the fixnum
+    indicating the position to indicate a failed parse.
+
+    In the case of a success and matching a sequence we don't really
+    need the whole result object for each submatch. Maybe return
+    result as multiple values from each rule, and have
+    WITH-CACHED-RESULT cons up the object to store it when?
+*** Cache
+    The cache is a big bottleneck. Try out a few different designs.
+    Early experiments show that while it's easy to make something
+    that conses less, it's not trivial to make it much faster than the
+    current simple hash-table based version.
+
+    Some statistics:
+    - 5-10% of positions in a given text have only failure results.
+      If we can efficiently record the rules these are for...
+    - 40-50% of positions in a given text end up with exactly one
+      successful result, irrespective of number of failures. Not sure
+      if we can use this.
+    - 75% of positions in a given text end up with
+      results. This should make a good estimate for the size of the
+      cache needed.
+
+    The GC is another related bottleneck. Not because we cons so much,
+    but because we have this massive cache that keeps being written
+    to, so we have boxed objects on dirty pages.
+
+    To reduce the GC pressure first optimize the result handling. If
+    the issue still exists, see the first option below.
+
+    Maybe: Map rule to a position cache. In the position cache, need
+    to be able to differentiate between 3 states: no result, success,
+    failure. Need to also be able to store the result. If we store
+    results in a single global result vector, and use N bits per
+    position in the position cache: 0 no result, 1 failure, anything
+    else is the position of the result object in the global vector.
+
+    Maybe: PCL-style multikey cache.
+
+    Maybe: Basic two-level cache. (Version of this on a branch.)
+
+*** Character ranges
+    (or "0" "1" "2" "3" "4" "5" "6" "7" "8" "9") can be implemented
+    with a range-check for char-code. Similarly (or "foobar" "foo"
+    "bar") can be implemented using tricks from pkhuong's STRING-CASE.
+* Grammar objects
+  Rules should be contained in grammars, so that symbols like CL:IF
+  can refer to different rules in different contexts. Grammars can
+  also enforce rule numbering, making caching results easier. It
+  should be possible to inherit from other grammars.
+* Character classes
+  Have a standard-grammar that defines things like DIGIT, WHITESPACE,
+  ASCII, etc.
+* Character ranges
+  Make it easy to specify character ranges, eg. (char #\0 #\9).
+* Thread safety
+  Parsing is currently thread-safe if PARSE has been
+  compiler-macroexanded. *RULES* needs locking, but isn't used
+  during actual parsing.
+* Tests
+  Um, yeah.
+* Transform Subseq
+  (defrule decimal (+ (or "0" "1" ...))
+    (:subseq-function parse-integer))
+
+

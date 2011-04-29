@@ -1,13 +1,9 @@
 ;;;; ESRAP -- a packrat parser for Common Lisp
 ;;;; by Nikodemus Siivola, 2007-2011
 ;;;;
-;;;; In addition to regular Packrat / Parsing Grammar / TDPL features
-;;;; ESRAP supports:
+;;;; Homepage and documentation:
 ;;;;
-;;;;  - dynamic redefinition of nonterminals
-;;;;  - inline grammars
-;;;;  - semantic predicates
-;;;;  - introspective facilities
+;;;;   http://nikodemus.github.com/esrap/
 ;;;;
 ;;;; References:
 ;;;;
@@ -32,70 +28,31 @@
 ;;;;  CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
 ;;;;  TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 ;;;;  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-;;;;
-;;;; Syntax overview:
-;;;;
-;;;;  <literal>                 -- case-sensitive terminal
-;;;;  (~ <literal>)             -- case-insensitive terminal
-;;;;  character                 -- any single character
-;;;;  (string length)           -- any string of length
-;;;;  (and &rest sequence)
-;;;;  (or &rest ordered-choises)
-;;;;  (* greedy-repetition)
-;;;;  (+ greedy-positive-repetition)
-;;;;  (? optional)
-;;;;  (& followed-by)           -- does not consume
-;;;;  (! not-followed-by)       -- does not consume
-;;;;  (<predicate> expr)        -- semantic parsing
-;;;;
-;;;; Examples:
-;;;;
-;;;;  (parse '(or "foo" "bar") "foo")         => "foo", NIL
-;;;;
-;;;;  (add-rule 'foo+ (make-instance 'rule :expression '(+ "foo"))) => FOO+
-;;;;
-;;;;  (parse 'foo+ "foofoofoo")               => ("foo" "foo" "foo"), NIL
-;;;;
-;;;;  (add-rule 'decimal
-;;;;            (make-instance 'rule
-;;;;             :expression '(+ (or "0" "1" "2" "3" "4" "5" "6" "7" "8" "9"))
-;;;;             :transform (lambda (list)
-;;;;                          (parse-integer (format nil "~{~A~}" list)))))
-;;;;   => DECIMAL
-;;;;
-;;;;  (parse '(oddp decimal) "123")                  => 123
-;;;;
-;;;;  (parse '(evenp decimal) "123" :junk-allowed t) => NIL, 0
-;;;;
-;;;; TODO:
-;;;;  - character classes
-;;;;  - setting breaks on rules
-;;;;  - proper tests
-;;;;  - states
-;;;;  - documentation
-;;;;  - transform-production vs. transform-subseq:
-;;;;    (add-rule 'decimal :expression '(+ (or "0" "1" ...))
-;;;;                       :transform-subseq #'parse-integer)
-;;;;  - optimizing single-character alternatives: store in a string,
-;;;;    not in a list.
 
 (defpackage :esrap
-    (:use :cl :alexandria)
-    (:export
-     #:! #:? #:+ #:* #:& #:~
-     #:add-rule
-     #:concat
-     #:describe-grammar
-     #:compile-grammar
-     #:defrule
-     #:find-rule
-     #:parse
-     #:rule
-     #:rule-dependencies
-     #:remove-rule
-     #:text
-     #:*rules*
-     ))
+  (:use :cl :alexandria)
+  #+sbcl
+  (:lock t)
+  (:export
+   #:! #:? #:+ #:* #:& #:~
+   #:add-rule
+   #:change-rule
+   #:concat
+   #:defrule
+   #:describe-grammar
+   #:compile-grammar
+   #:find-rule
+   #:parse
+   #:remove-rule
+   #:rule
+   #:rule-dependencies
+   #:rule-expression
+   #:rule-symbol
+   #:text
+   #:trace-rule
+   #:untrace-rule
+   #:*rules*
+   ))
 
 (in-package :esrap)
 
@@ -138,10 +95,10 @@ and expressions of the form \(~ <literal>) denote case-insensitive terminals."
 
 ;;; RULE REPRESENTATION AND STORAGE
 ;;;
-;;; For each rule, there is a cons cell in *RULES*, which has the function
-;;; that implements the rule in car, and the rule object in CDR. A RULE object
-;;; can be attached to only one non-terminal at a time, which is accessible
-;;; via RULE-SYMBOL.
+;;; For each rule, there is a RULE-CELL in *RULES*, whose %INFO slot has the
+;;; function that implements the rule in car, and the rule object in CDR. A
+;;; RULE object can be attached to only one non-terminal at a time, which is
+;;; accessible via RULE-SYMBOL.
 
 (defvar *rules* (make-hash-table))
 
@@ -149,47 +106,46 @@ and expressions of the form \(~ <literal>) denote case-insensitive terminals."
   (clrhash *rules*)
   nil)
 
-(deftype rule-cell ()
-  '(cons function (cons t t)))
+(defstruct (rule-cell (:constructor
+                       make-rule-cell
+                       (symbol &aux (%info (cons (undefined-rule-function symbol) nil))))
+                      (:conc-name cell-))
+  (%info (required-argument) :type (cons function t))
+  (trace-info nil)
+  (referents nil :type list))
 
 (declaim (inline cell-function))
 (defun cell-function (cell)
-  (car cell))
-
-(defun (setf cell-function) (function cell)
-  (declare (function function) (rule-cell cell))
-  (setf (car cell) function))
-
-(defun cell-referents (cell)
-  (car (cdr cell)))
-
-(defun (setf cell-referents) (list cell)
-  (declare (rule-cell cell))
-  (setf (car (cdr cell)) list))
+  (car (cell-%info cell)))
 
 (defun cell-rule (cell)
-  (cdr (cdr cell)))
+  (cdr (cell-%info cell)))
 
-(defun (setf cell-rule) (rule cell)
-  (declare (rule-cell cell))
-  (setf (cdr (cdr cell)) rule))
+(defun set-cell-info (cell function rule)
+  ;; Atomic update
+  (setf (cell-%info cell) (cons function rule))
+  (let ())
+  cell)
+
+(defun undefined-rule-function (symbol)
+  (lambda (&rest args)
+    (declare (ignore args))
+    (error "Undefined rule: ~S" symbol)))
 
 (defun ensure-rule-cell (symbol)
   (check-type symbol nonterminal)
   ;; FIXME: Need to lock *RULES*.
   (or (gethash symbol *rules*)
       (setf (gethash symbol *rules*)
-            (cons (lambda (&rest args)
-                    (declare (ignore args))
-                    (error "Undefined rule: ~S" symbol))
-                  (cons nil nil)))))
+            (make-rule-cell symbol))))
 
 (defun delete-rule-cell (symbol)
   (remhash symbol *rules*))
 
 (defun reference-rule-cell (symbol referent)
   (let ((cell (ensure-rule-cell symbol)))
-    (pushnew referent (cell-referents cell))
+    (when referent
+      (pushnew referent (cell-referents cell)))
     cell))
 
 (defun dereference-rule-cell (symbol referent)
@@ -203,12 +159,10 @@ and expressions of the form \(~ <literal>) denote case-insensitive terminals."
 
 (defclass rule ()
   ((%symbol
-    :initform nil
-    :reader rule-symbol)
+    :initform nil)
    (%expression
     :initarg :expression
-    :initform (required-argument :expression)
-    :reader rule-expression)
+    :initform (required-argument :expression))
    (%guard-expression
     :initarg :guard-expression
     :initform t
@@ -225,8 +179,13 @@ and expressions of the form \(~ <literal>) denote case-insensitive terminals."
     :initform nil
     :reader rule-transform)))
 
+(defun rule-symbol (rule)
+  "Returns the nonterminal associated with the RULE, or NIL of the rule
+is not attached to any nonterminal."
+  (slot-value rule '%symbol))
+
 (defun detach-rule (rule)
-  (dolist (dep (rule-direct-dependencies rule))
+  (dolist (dep (%rule-direct-dependencies rule))
     (dereference-rule-cell dep (rule-symbol rule)))
   (setf (slot-value rule '%symbol) nil))
 
@@ -261,6 +220,9 @@ symbols."
 (defun rule-direct-dependencies (rule)
   (sort-dependencies
    (rule-symbol rule) (%expression-direct-dependencies (rule-expression rule) nil)))
+
+(defun %rule-direct-dependencies (rule)
+  (delete (rule-symbol rule) (%expression-direct-dependencies (rule-expression rule) nil)))
 
 ;;; Expression destructuring and validation
 
@@ -368,6 +330,8 @@ symbols."
   (compile-expression expression))
 
 (defun parse (expression text &key (start 0) end junk-allowed)
+  "Parses TEXT using EXPRESSION from START to END. Incomplete parses
+are allowed only if JUNK-ALLOWED is true."
   ;; There is no backtracking in the toplevel expression -- so there's
   ;; no point in compiling it as it will be executed only once -- unless
   ;; it's a constant, for which we have a compiler-macro.
@@ -420,6 +384,44 @@ symbols."
                       (error "Incomplete parse, stopped at ~S." position)))))))
 
 (defmacro defrule (&whole form symbol expression &body options)
+  "Define SYMBOL as a nonterminal, using EXPRESSION as associated the parsing expression.
+
+Following OPTIONS can be specified:
+
+  * (:WHEN TEST)
+
+    The rule is active only when TEST evaluates to true. This can be used
+    to specify optional extensions to a grammar.
+
+  * (:CONSTANT CONSTANT)
+
+    No matter what input is consumed or what EXPRESSION produces, the production
+    of the rule is always CONSTANT.
+
+  * (:FUNCTION FUNCTION)
+
+    If provided the production of the expression is transformed using
+    FUNCTION. FUNCTION can be a function name or a lambda-expression.
+
+  * (:IDENTITY BOOLEAN)
+
+    If true, the production of expression is used as-is, as if (:FUNCTION IDENTITY)
+    has been specified. If no production option is specified, this is the default.
+
+  * (:TEXT BOOLEAN)
+
+    If true, the production of expression is flattened and concatenated into a string
+    as if by (:FUNCTION TEXT) has been specified.
+
+  * (:LAMBDA LAMBDA-LIST &BODY BODY)
+
+    If provided, same as using the corresponding lambda-expression with :FUNCTION.
+
+  * (:DESTRUCTURE DESTRUCTURING-LAMBDA-LIST &BODY BODY)
+
+    If provided, same as using a lambda-expression that destructures its argument
+    using DESTRUCTURING-BIND and the provided lambda-list with :FUNCTION.
+"
   (let ((transform nil)
         (guard t)
         (condition t)
@@ -447,7 +449,7 @@ symbols."
                        (set-guard expr nil))
                    (set-guard expr `(lambda () ,expr)))))
             ((:constant)
-             (setf transform `(lambda (x) (declare (ignore x)) ,(second option))))
+             (setf transform `(constantly ,(second options))))
             ((:concat)
              (note-deprecated :concat :text)
              (when (second option)
@@ -474,7 +476,7 @@ symbols."
        (add-rule ',symbol (make-instance 'rule
                                          :expression ',expression
                                          :guard-expression ',guard
-                                         :transform ,transform
+                                         :transform ,(or transform '#'identity)
                                          :condition ,condition)))))
 
 (defun add-rule (symbol rule)
@@ -486,14 +488,17 @@ associated with a rule, the old rule is removed first."
   (when (rule-symbol rule)
     (error "~S is already associated with the nonterminal ~S -- remove it first."
            rule (rule-symbol rule)))
-  (let ((cell (ensure-rule-cell symbol))
-        (function (compile-rule symbol
-                                (rule-expression rule)
-                                (rule-condition rule)
-                                (rule-transform rule))))
-    (setf (cell-function cell) function
-          (cell-rule cell) rule
-          (slot-value rule '%symbol) symbol)
+  (let* ((cell (ensure-rule-cell symbol))
+         (function (compile-rule symbol
+                                 (rule-expression rule)
+                                 (rule-condition rule)
+                                 (rule-transform rule)))
+         (trace-info (cell-trace-info cell)))
+    (set-cell-info cell function rule)
+    (setf (cell-trace-info cell) nil)
+    (setf (slot-value rule '%symbol) symbol)
+    (when trace-info
+      (trace-rule symbol :break (second trace-info)))
     symbol))
 
 (defun find-rule (symbol)
@@ -502,7 +507,7 @@ symbol."
   (check-type symbol nonterminal)
   (let ((cell (find-rule-cell symbol)))
     (when cell
-      (cddr cell))))
+      (cell-rule cell))))
 
 (defun remove-rule (symbol &key force)
   "Makes the nonterminal SYMBOL undefined. If the nonterminal is defined an
@@ -511,24 +516,113 @@ true."
   (check-type symbol nonterminal)
   ;; FIXME: Lock and WITHOUT-INTERRUPTS.
   (let* ((cell (find-rule-cell symbol))
-         (rule (cell-rule cell)))
+         (rule (cell-rule cell))
+         (trace-info (cell-trace-info cell)))
     (when cell
-      (cond ((and rule (cell-referents cell))
-             (unless force
-               (error "Nonterminal ~S is used by other nonterminal~P:~% ~{~S~^, ~}"
-                      symbol (length (cell-referents cell)) (cell-referents cell)))
-             (setf (cell-function cell) (lambda (text position end)
-                                          (declare (ignore text position end))
-                                          (error "Undefined rule: ~S" symbol))
-                   (cell-rule cell) nil)
-             (detach-rule rule))
-            ((not (cell-referents cell))
-             (when rule
-               (detach-rule rule))
-             ;; There are no references to the rule at all, so
-             ;; we can remove the cell.
-             (delete-rule-cell symbol)))
+      (flet ((frob ()
+               (set-cell-info cell (undefined-rule-function symbol) nil)
+               (when trace-info
+                 (setf (cell-trace-info cell) (list (cell-%info cell) (second trace-info))))
+               (when rule
+                 (detach-rule rule))))
+        (cond ((and rule (cell-referents cell))
+               (unless force
+                 (error "Nonterminal ~S is used by other nonterminal~P:~% ~{~S~^, ~}"
+                        symbol (length (cell-referents cell)) (cell-referents cell)))
+               (frob))
+              ((not (cell-referents cell))
+               (frob)
+               ;; There are no references to the rule at all, so
+               ;; we can remove the cell.
+               (unless trace-info
+                 (delete-rule-cell symbol)))))
       rule)))
+
+(defvar *trace-level* 0)
+
+(defvar *trace-stack* nil)
+
+(defun trace-rule (symbol &key recursive break)
+  "Turn on tracing of nonterminal SYMBOL. If RECURSIVE is true, turn
+on tracing for the whole grammar rooted at SYMBOL. If BREAK is true,
+break is entered when the rule is invoked."
+  (unless (member symbol *trace-stack* :test #'eq)
+    (let ((cell (find-rule-cell symbol)))
+      (unless cell
+        (error "Undefined rule: ~S" symbol))
+      (when (cell-trace-info cell)
+        (let ((*trace-stack* nil))
+          (untrace-rule symbol)))
+      (let ((fun (cell-function cell))
+            (rule (cell-rule cell))
+            (info (cell-%info cell)))
+        (set-cell-info cell
+                       (lambda (text position end)
+                         (when break
+                           (break "rule ~S" symbol))
+                         (let ((space (make-string *trace-level* :initial-element #\space))
+                               (*trace-level* (+ 1 *trace-level*)))
+                           (format *trace-output* "~&~A~D: ~S ~S? ~%"
+                                   space *trace-level* symbol position)
+                           (finish-output *trace-output*)
+                           (let ((result (funcall fun text position end)))
+                             (if (error-result-p result)
+                                 (format *trace-output* "~&~A~D: ~S -|~%"
+                                         space *trace-level* symbol)
+                                 (format *trace-output* "~&~A~D: ~S ~S-~S -> ~S~%"
+                                         space *trace-level* symbol
+                                         position
+                                         (result-position result)
+                                         (result-production result)))
+                             (finish-output *trace-output*)
+                             result)))
+                       rule)
+        (setf (cell-trace-info cell) (list info break)))
+      (when recursive
+        (let ((*trace-stack* (cons symbol *trace-stack*)))
+          (dolist (dep (%rule-direct-dependencies (cell-rule cell)))
+            (trace-rule dep :recursive t :break break))))
+      t)))
+
+(defun untrace-rule (symbol &key recursive)
+  "Turn off tracing of nonterminal SYMBOL. If RECURSIVE is true, untraces the
+whole grammar rooted at SYMBOL."
+  (unless (member symbol *trace-stack* :test #'eq)
+    (let ((cell (find-rule-cell symbol)))
+      (unless cell
+        (error "Undefined rule: ~S" symbol))
+      (let ((trace-info (cell-trace-info cell)))
+        (when trace-info
+          (setf (cell-%info cell) (car trace-info)
+                (cell-trace-info cell) nil))
+        (when recursive
+          (let ((*trace-stack* (cons symbol *trace-stack*)))
+            (dolist (dep (%rule-direct-dependencies (cell-rule cell)))
+              (untrace-rule dep :recursive t))))))
+    nil))
+
+(defun rule-expression (rule)
+  "Return the parsing expression associated with the RULE."
+  (slot-value rule '%expression))
+
+(defun (setf rule-expression) (expression rule)
+  "Modify RULE to use EXPRESSION as the parsing expression. The rule must be
+detached beforehand."
+  (let ((name (rule-symbol rule)))
+    (when name
+      (error "~@<Cannot change the expression of an active rule, ~
+              remove ~S first, or use CHANGE-RULE.~:@>"
+             name))
+    (setf (slot-value rule '%expression) expression)))
+
+(defun change-rule (symbol expression)
+  "Modifies the nonterminal SYMBOL to use EXPRESSION instead. Temporarily
+removes the rule while it is being modified."
+  (let ((rule (remove-rule symbol :force t)))
+    (unless rule
+      (error "~S is not a defined rule." symbol))
+    (setf (rule-expression rule) expression)
+    (add-rule symbol rule)))
 
 (defun symbol-length (x)
   (length (symbol-name x)))
@@ -565,13 +659,14 @@ inspection."
 
 ;;; COMPILING RULES
 
-(defvar *current-rule*)
+(defvar *current-rule* nil)
 
 (defun compile-rule (symbol expression condition transform)
   (declare (type (or boolean function) condition transform))
-  (let ((*current-rule* symbol)
-        (function (compile-expression expression))
-        (rule-not-active (when condition (make-inactive-rule :name symbol))))
+  (let* ((*current-rule* symbol)
+         ;; Must bind *CURRENT-RULE* before compiling the expression!
+         (function (compile-expression expression))
+         (rule-not-active (when condition (make-inactive-rule :name symbol))))
     (cond ((not condition)
            (named-lambda inactive-rule (text position end)
              (declare (ignore text position end))
@@ -827,9 +922,7 @@ inspection."
       (funcall (cell-function (ensure-rule-cell symbol)) text position end)))
 
 (defun compile-nonterminal (symbol)
-  (let ((cell (if (boundp '*current-rule*)
-                  (reference-rule-cell symbol *current-rule*)
-                  (ensure-rule-cell symbol))))
+  (let ((cell (reference-rule-cell symbol *current-rule*)))
     (declare (rule-cell cell))
     (named-lambda compile-nonterminal (text position end)
       (funcall (cell-function cell) text position end))))
@@ -892,7 +985,7 @@ inspection."
                                  (< position (failed-parse-position result))))
                         (and last-error
                              (failed-parse-p result)
-                             (or (invative-rule-p last-error)
+                             (or (inactive-rule-p last-error)
                                  (< (failed-parse-position last-error)
                                     (failed-parse-position result)))))
                 (setf last-error result))
@@ -903,7 +996,7 @@ inspection."
     (let ((type :characters)
           (canonized nil))
       (dolist (sub subexprs)
-        (when (typep sub '(or character string))        
+        (when (typep sub '(or character string))
           (let* ((this (string sub))
                  (len (length this)))
             (unless (some (lambda (seen)
