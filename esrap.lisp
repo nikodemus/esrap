@@ -454,7 +454,7 @@ Following OPTIONS can be specified:
                        (set-guard expr nil))
                    (set-guard expr `(lambda () ,expr)))))
             ((:constant)
-             (setf transform `(constantly ,(second options))))
+             (setf transform `(constantly ,(second option))))
             ((:concat)
              (note-deprecated :concat :text)
              (when (second option)
