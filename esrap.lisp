@@ -1230,3 +1230,19 @@ inspection."
                     (make-failed-parse
                      :position position
                      :expression expression)))))))))
+
+(defvar *indentation-hint-table* nil)
+
+(defun hint-slime-indentation ()
+  (let* ((swank (find-package :swank))
+         (tables (when swank
+                   (find-symbol (string '#:*application-hints-tables*) swank))))
+    (when tables
+      (let ((table (make-hash-table :test #'eq)))
+        (setf (gethash 'defrule table)
+              '(4 &lambda &rest (&whole 2 &lambda &body)))
+        (set tables (cons table (remove *indentation-hint-table* (symbol-value tables))))
+        (setf *indentation-hint-table* table))
+      t)))
+
+(hint-slime-indentation)

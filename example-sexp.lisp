@@ -29,8 +29,8 @@
 
 (defrule sexp (and (? whitespace) (or magic list atom))
   (:destructure (w s)
-     (declare (ignore w))
-     s))
+    (declare (ignore w))
+    s))
 
 (defrule magic "foobar"
   (:constant :magic)
