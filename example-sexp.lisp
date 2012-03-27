@@ -28,9 +28,9 @@
 ;;; Here we go: an S-expression is either a list or an atom, with possibly leading whitespace.
 
 (defrule sexp (and (? whitespace) (or magic list atom))
-  (:destructure (w s)
+  (:destructure (w s &position start end)
     (declare (ignore w))
-    s))
+    (list s (cons start end))))
 
 (defrule magic "foobar"
   (:constant :magic)

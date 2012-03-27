@@ -34,6 +34,8 @@
   #+sbcl
   (:lock t)
   (:export
+   #:&position
+
    #:! #:? #:+ #:* #:& #:~
    #:add-rule
    #:change-rule
@@ -422,10 +424,18 @@ Following OPTIONS can be specified:
 
     If provided, same as using the corresponding lambda-expression with :FUNCTION.
 
+    LAMBDA-LIST can end in a sequence of the form ESRAP:&POSITION
+    START END where START and END symbols and END can be omitted. If
+    such a construct is present, START and END are bound to the start
+    and end positions in the input at which the rule succeeded.
+
   * (:DESTRUCTURE DESTRUCTURING-LAMBDA-LIST &BODY BODY)
 
     If provided, same as using a lambda-expression that destructures its argument
     using DESTRUCTURING-BIND and the provided lambda-list with :FUNCTION.
+
+    DESTRUCTURING-LAMBDA-LIST can use ESRAP:&POSITION in the same way
+    as described for :LAMBDA.
 "
   (let ((transform nil)
         (guard t)
@@ -433,7 +443,27 @@ Following OPTIONS can be specified:
         (guard-seen nil))
     (when options
       (dolist (option options)
-        (flet ((set-transform (trans)
+        (flet ((parse-lambda-list (lambda-list)
+		 (let ((length (length lambda-list)))
+		   (multiple-value-bind (lambda-list start end)
+		       (cond
+			 ((and (>= length 3)
+			       (eq (nth (- length 3) lambda-list) '&position))
+			  (values (subseq lambda-list 0 (- length 3))
+				  (nth (- length 2) lambda-list)
+				  (nth (- length 1) lambda-list)))
+			 ((and (>= length 2)
+			       (eq (nth (- length 2) lambda-list) '&position))
+			  (values (subseq lambda-list 0 (- length 2))
+				  (nth (- length 1) lambda-list)))
+			 (t
+			  lambda-list))
+		     (when start
+		       (check-type start symbol))
+		     (when end
+		       (check-type end symbol))
+		     (values lambda-list start end))))
+	       (set-transform (trans)
                  (if transform
                      (error "Multiple transforms in DEFRULE:~% ~S" form)
                      (setf transform trans)))
@@ -458,30 +488,52 @@ Following OPTIONS can be specified:
             ((:concat)
              (note-deprecated :concat :text)
              (when (second option)
-               (setf transform '#'text)))
+               (setf transform '(lambda (result start end)
+				 (declare (ignore start end))
+				 (text result)))))
             ((:text)
              (when (second option)
-               (setf transform '#'text)))
+               (setf transform '(lambda (result start end)
+				 (declare (ignore start end))
+				 (text result)))))
             ((:identity)
              (when (second option)
-               (setf transform '#'identity)))
+               (setf transform '(lambda (result start end)
+				 (declare (ignore start end))
+				 result))))
             ((:lambda)
-                (destructuring-bind (lambda-list &body forms) (cdr option)
-                  (setf transform `(lambda ,lambda-list ,@forms))))
+	     (destructuring-bind (lambda-list &body forms) (cdr option)
+	       (multiple-value-bind (lambda-list start-var end-var)
+		   (parse-lambda-list lambda-list)
+		 (setf transform
+		       (with-gensyms (start end)
+			 `(lambda ,(append lambda-list (list (or start-var start)
+							     (or end-var end)))
+			    (declare (ignore ,@(unless start-var `(,start))
+					     ,@(unless end-var   `(,end))))
+			    ,@forms))))))
             ((:function)
-             (setf transform `(function ,(second option))))
+             (setf transform `(lambda (result position)
+			        (declare (ignore position))
+				(funcall (function ,(second option)) result))))
             ((:destructure)
              (destructuring-bind (lambda-list &body forms) (cdr option)
-               (setf transform
-                     (with-gensyms (production)
-                       `(lambda (,production)
-                          (destructuring-bind ,lambda-list ,production
-                            ,@forms))))))))))
+	       (multiple-value-bind (lambda-list start-var end-var)
+		   (parse-lambda-list lambda-list)
+		 (setf transform
+		       (with-gensyms (production start end)
+			 `(lambda (,production ,(or start-var start) ,(or end-var end))
+			    (declare (ignore ,@(unless start-var `(,start))
+					     ,@(unless end-var   `(,end))))
+			    (destructuring-bind ,lambda-list ,production
+			      ,@forms)))))))))))
     `(eval-when (:load-toplevel :execute)
        (add-rule ',symbol (make-instance 'rule
                                          :expression ',expression
                                          :guard-expression ',guard
-                                         :transform ,(or transform '#'identity)
+                                         :transform ,(or transform '(lambda (result start end)
+								     (declare (ignore start end))
+								     result))
                                          :condition ,condition)))))
 
 (defun add-rule (symbol rule)
@@ -680,15 +732,18 @@ inspection."
            (flet ((exec-rule/transform (text position end)
                     (let ((result (funcall function text position end)))
                       (if (error-result-p result)
-                          (make-failed-parse
-                           :expression symbol
-                           :position (if (failed-parse-p result)
-                                         (failed-parse-position result)
-                                         position)
-                           :detail result)
-                          (make-result
-                           :position (result-position result)
-                           :production (funcall transform (result-production result)))))))
+			  (make-failed-parse
+			   :expression symbol
+			   :position (if (failed-parse-p result)
+					 (failed-parse-position result)
+					 position)
+			   :detail result)
+			  (make-result
+			   :position   (result-position result)
+			   :production (funcall transform
+						(result-production result)
+						position
+						(result-position result)))))))
              (if (eq t condition)
                  (named-lambda rule/transform (text position end)
                    (with-cached-result (symbol position)
