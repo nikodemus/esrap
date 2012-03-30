@@ -34,7 +34,7 @@
   #+sbcl
   (:lock t)
   (:export
-   #:&position
+   #:&bounds
 
    #:! #:? #:+ #:* #:& #:~
    #:add-rule
@@ -82,6 +82,36 @@ Catenates all the strings in arguments into a single string."
   (declare (ignore arguments))
   (note-deprecated 'concat 'text)
   form)
+
+(defun parse-lambda-list-maybe-containing-&bounds (lambda-list)
+  "Parse &BOUNDS section in LAMBDA-LIST and return three values:
+1. The standard lambda list sublist of LAMBDA-LIST
+2. A symbol that should be bound to the start of a matching substring
+3. A symbol that should be bound to the end of a matching substring
+The second and/or third value are NIL if LAMBDA-LIST contains a
+partial or no &BOUNDS section."
+  (let ((length (length lambda-list)))
+    (multiple-value-bind (lambda-list start end)
+        (cond
+          ;; Look for &BOUNDS START END.
+          ((and (>= length 3)
+                (eq (nth (- length 3) lambda-list) '&bounds))
+           (values (subseq lambda-list 0 (- length 3))
+                   (nth (- length 2) lambda-list)
+                   (nth (- length 1) lambda-list)))
+          ;; Look for &BOUNDS START.
+          ((and (>= length 2)
+                (eq (nth (- length 2) lambda-list) '&bounds))
+           (values (subseq lambda-list 0 (- length 2))
+                   (nth (- length 1) lambda-list)))
+          ;; No &BOUNDS section.
+          (t
+           lambda-list))
+      (when start
+        (check-type start symbol))
+      (when end
+        (check-type end symbol))
+      (values lambda-list start end))))
 
 (deftype nonterminal ()
   "Any symbol except CHARACTER and NIL can be used as a nonterminal symbol."
@@ -424,17 +454,23 @@ Following OPTIONS can be specified:
 
     If provided, same as using the corresponding lambda-expression with :FUNCTION.
 
-    LAMBDA-LIST can end in a sequence of the form ESRAP:&POSITION
-    START END where START and END symbols and END can be omitted. If
-    such a construct is present, START and END are bound to the start
-    and end positions in the input at which the rule succeeded.
+    As an extension of the standard lambda list syntax, LAMBDA-LIST
+    accepts the optional pseudo lambda-list keyword ESRAP:&BOUNDS,
+    which
+    (1) must appear after all standard lambda list keywords.
+    (2) can be followed by one variable or two variables to which
+        bounding indexes of the matching substring are bound.
+
+    Therefore:
+
+      LAMBDA-LIST ::= (STANDARD-LAMBDA-LIST-ELEMENTS [&BOUNDS START [END]])
 
   * (:DESTRUCTURE DESTRUCTURING-LAMBDA-LIST &BODY BODY)
 
     If provided, same as using a lambda-expression that destructures its argument
     using DESTRUCTURING-BIND and the provided lambda-list with :FUNCTION.
 
-    DESTRUCTURING-LAMBDA-LIST can use ESRAP:&POSITION in the same way
+    DESTRUCTURING-LAMBDA-LIST can use ESRAP:&BOUNDS in the same way
     as described for :LAMBDA.
 "
   (let ((transform nil)
@@ -443,27 +479,7 @@ Following OPTIONS can be specified:
         (guard-seen nil))
     (when options
       (dolist (option options)
-        (flet ((parse-lambda-list (lambda-list)
-		 (let ((length (length lambda-list)))
-		   (multiple-value-bind (lambda-list start end)
-		       (cond
-			 ((and (>= length 3)
-			       (eq (nth (- length 3) lambda-list) '&position))
-			  (values (subseq lambda-list 0 (- length 3))
-				  (nth (- length 2) lambda-list)
-				  (nth (- length 1) lambda-list)))
-			 ((and (>= length 2)
-			       (eq (nth (- length 2) lambda-list) '&position))
-			  (values (subseq lambda-list 0 (- length 2))
-				  (nth (- length 1) lambda-list)))
-			 (t
-			  lambda-list))
-		     (when start
-		       (check-type start symbol))
-		     (when end
-		       (check-type end symbol))
-		     (values lambda-list start end))))
-	       (set-transform (trans)
+        (flet ((set-transform (trans)
                  (if transform
                      (error "Multiple transforms in DEFRULE:~% ~S" form)
                      (setf transform trans)))
@@ -489,51 +505,51 @@ Following OPTIONS can be specified:
              (note-deprecated :concat :text)
              (when (second option)
                (setf transform '(lambda (result start end)
-				 (declare (ignore start end))
-				 (text result)))))
+                                 (declare (ignore start end))
+                                 (text result)))))
             ((:text)
              (when (second option)
                (setf transform '(lambda (result start end)
-				 (declare (ignore start end))
-				 (text result)))))
+                                 (declare (ignore start end))
+                                 (text result)))))
             ((:identity)
              (when (second option)
                (setf transform '(lambda (result start end)
-				 (declare (ignore start end))
-				 result))))
+                                 (declare (ignore start end))
+                                 result))))
             ((:lambda)
-	     (destructuring-bind (lambda-list &body forms) (cdr option)
-	       (multiple-value-bind (lambda-list start-var end-var)
-		   (parse-lambda-list lambda-list)
-		 (setf transform
-		       (with-gensyms (start end)
-			 `(lambda ,(append lambda-list (list (or start-var start)
-							     (or end-var end)))
-			    (declare (ignore ,@(unless start-var `(,start))
-					     ,@(unless end-var   `(,end))))
-			    ,@forms))))))
+             (destructuring-bind (lambda-list &body forms) (cdr option)
+               (multiple-value-bind (lambda-list start-var end-var)
+                   (parse-lambda-list-maybe-containing-&bounds lambda-list)
+                 (setf transform
+                       (with-gensyms (start end)
+                         `(lambda ,(append lambda-list (list (or start-var start)
+                                                             (or end-var end)))
+                            (declare (ignore ,@(unless start-var `(,start))
+                                             ,@(unless end-var   `(,end))))
+                            ,@forms))))))
             ((:function)
-             (setf transform `(lambda (result position)
-			        (declare (ignore position))
-				(funcall (function ,(second option)) result))))
+             (setf transform `(lambda (result start end)
+                                (declare (ignore start end))
+                                (funcall (function ,(second option)) result))))
             ((:destructure)
              (destructuring-bind (lambda-list &body forms) (cdr option)
-	       (multiple-value-bind (lambda-list start-var end-var)
-		   (parse-lambda-list lambda-list)
-		 (setf transform
-		       (with-gensyms (production start end)
-			 `(lambda (,production ,(or start-var start) ,(or end-var end))
-			    (declare (ignore ,@(unless start-var `(,start))
-					     ,@(unless end-var   `(,end))))
-			    (destructuring-bind ,lambda-list ,production
-			      ,@forms)))))))))))
+               (multiple-value-bind (lambda-list start-var end-var)
+                   (parse-lambda-list-maybe-containing-&bounds lambda-list)
+                 (setf transform
+                       (with-gensyms (production start end)
+                         `(lambda (,production ,(or start-var start) ,(or end-var end))
+                            (declare (ignore ,@(unless start-var `(,start))
+                                             ,@(unless end-var   `(,end))))
+                            (destructuring-bind ,lambda-list ,production
+                              ,@forms)))))))))))
     `(eval-when (:load-toplevel :execute)
        (add-rule ',symbol (make-instance 'rule
                                          :expression ',expression
                                          :guard-expression ',guard
                                          :transform ,(or transform '(lambda (result start end)
-								     (declare (ignore start end))
-								     result))
+                                                                     (declare (ignore start end))
+                                                                     result))
                                          :condition ,condition)))))
 
 (defun add-rule (symbol rule)
@@ -732,18 +748,18 @@ inspection."
            (flet ((exec-rule/transform (text position end)
                     (let ((result (funcall function text position end)))
                       (if (error-result-p result)
-			  (make-failed-parse
-			   :expression symbol
-			   :position (if (failed-parse-p result)
-					 (failed-parse-position result)
-					 position)
-			   :detail result)
-			  (make-result
-			   :position   (result-position result)
-			   :production (funcall transform
-						(result-production result)
-						position
-						(result-position result)))))))
+                          (make-failed-parse
+                           :expression symbol
+                           :position (if (failed-parse-p result)
+                                         (failed-parse-position result)
+                                         position)
+                           :detail result)
+                          (make-result
+                           :position   (result-position result)
+                           :production (funcall transform
+                                                (result-production result)
+                                                position
+                                                (result-position result)))))))
              (if (eq t condition)
                  (named-lambda rule/transform (text position end)
                    (with-cached-result (symbol position)
