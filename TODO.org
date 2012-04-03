@@ -69,8 +69,6 @@ Esrap TODO
   Parsing is currently thread-safe if PARSE has been
   compiler-macroexanded. *RULES* needs locking, but isn't used
   during actual parsing.
-* Tests
-  Um, yeah.
 * Transform Subseq
   (defrule decimal (+ (or "0" "1" ...))
     (:subseq-function parse-integer))

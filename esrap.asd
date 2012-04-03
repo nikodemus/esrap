@@ -16,6 +16,11 @@
 ;;;;  TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 ;;;;  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+(defpackage :esrap-system
+  (:use :cl :asdf))
+
+(in-package :esrap-system)
+
 (defsystem :esrap
   :version "0.9"
   :description "A Packrat / Parsing Grammar / TDPL parser for Common Lisp."
@@ -25,3 +30,12 @@
                (:static-file "example-sexp.lisp")
                (:static-file "README")))
 
+(defsystem :esrap-tests
+  :description "Tests for ESRAP."
+  :licence "MIT"
+  :depends-on (:esrap :eos)
+  :components ((:file "tests")))
+
+(defmethod perform ((op test-op) (sys (eql (find-system :esrap))))
+  (load-system :esrap-tests)
+  (funcall (intern "RUN-TESTS" :esrap-tests)))
