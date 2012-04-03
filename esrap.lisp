@@ -83,35 +83,59 @@ Catenates all the strings in arguments into a single string."
   (note-deprecated 'concat 'text)
   form)
 
+(defun text/bounds (strings start end)
+  (declare (ignore start end))
+  (text strings))
+
+(defun lambda/bounds (function)
+  (lambda (result start end)
+    (declare (ignore start end))
+    (funcall function result)))
+
+(defun identity/bounds (identity start end)
+  (declare (ignore start end))
+  identity)
+
 (defun parse-lambda-list-maybe-containing-&bounds (lambda-list)
   "Parse &BOUNDS section in LAMBDA-LIST and return three values:
+
 1. The standard lambda list sublist of LAMBDA-LIST
 2. A symbol that should be bound to the start of a matching substring
 3. A symbol that should be bound to the end of a matching substring
-The second and/or third value are NIL if LAMBDA-LIST contains a
-partial or no &BOUNDS section."
+4. A list containing symbols that were GENSYM'ed.
+
+The second and/or third values are GENSYMS if LAMBDA-LIST contains a
+partial or no &BOUNDS section, in which case fourth value contains them
+for use with IGNORE."
   (let ((length (length lambda-list)))
-    (multiple-value-bind (lambda-list start end)
+    (multiple-value-bind (lambda-list start end gensyms)
         (cond
           ;; Look for &BOUNDS START END.
           ((and (>= length 3)
                 (eq (nth (- length 3) lambda-list) '&bounds))
            (values (subseq lambda-list 0 (- length 3))
                    (nth (- length 2) lambda-list)
-                   (nth (- length 1) lambda-list)))
+                   (nth (- length 1) lambda-list)
+                   nil))
           ;; Look for &BOUNDS START.
           ((and (>= length 2)
                 (eq (nth (- length 2) lambda-list) '&bounds))
-           (values (subseq lambda-list 0 (- length 2))
-                   (nth (- length 1) lambda-list)))
+           (let ((end (gensym "END")))
+             (values (subseq lambda-list 0 (- length 2))
+                     (nth (- length 1) lambda-list)
+                     end
+                     (list end))))
           ;; No &BOUNDS section.
           (t
-           lambda-list))
-      (when start
-        (check-type start symbol))
-      (when end
-        (check-type end symbol))
-      (values lambda-list start end))))
+           (let ((start (gensym "START"))
+                 (end (gensym "END")))
+             (values lambda-list
+                     start
+                     end
+                     (list start end)))))
+      (check-type start symbol)
+      (check-type end symbol)
+      (values lambda-list start end gensyms))))
 
 (deftype nonterminal ()
   "Any symbol except CHARACTER and NIL can be used as a nonterminal symbol."
@@ -454,12 +478,10 @@ Following OPTIONS can be specified:
 
     If provided, same as using the corresponding lambda-expression with :FUNCTION.
 
-    As an extension of the standard lambda list syntax, LAMBDA-LIST
-    accepts the optional pseudo lambda-list keyword ESRAP:&BOUNDS,
-    which
-    (1) must appear after all standard lambda list keywords.
-    (2) can be followed by one variable or two variables to which
-        bounding indexes of the matching substring are bound.
+    As an extension of the standard lambda list syntax, LAMBDA-LIST accepts
+    the optional pseudo lambda-list keyword ESRAP:&BOUNDS, which (1) must appear
+    after all standard lambda list keywords. (2) can be followed by one or two
+    variables to which bounding indexes of the matching substring are bound.
 
     Therefore:
 
@@ -504,52 +526,38 @@ Following OPTIONS can be specified:
             ((:concat)
              (note-deprecated :concat :text)
              (when (second option)
-               (setf transform '(lambda (result start end)
-                                 (declare (ignore start end))
-                                 (text result)))))
+               (setf transform '#'text/bounds)))
             ((:text)
              (when (second option)
-               (setf transform '(lambda (result start end)
-                                 (declare (ignore start end))
-                                 (text result)))))
+               (setf transform '#'text/bounds)))
             ((:identity)
              (when (second option)
-               (setf transform '(lambda (result start end)
-                                 (declare (ignore start end))
-                                 result))))
+               (setf transform '#'identity/bounds)))
             ((:lambda)
              (destructuring-bind (lambda-list &body forms) (cdr option)
-               (multiple-value-bind (lambda-list start-var end-var)
+               (multiple-value-bind (lambda-list start end ignore)
                    (parse-lambda-list-maybe-containing-&bounds lambda-list)
                  (setf transform
-                       (with-gensyms (start end)
-                         `(lambda ,(append lambda-list (list (or start-var start)
-                                                             (or end-var end)))
-                            (declare (ignore ,@(unless start-var `(,start))
-                                             ,@(unless end-var   `(,end))))
-                            ,@forms))))))
+                       `(lambda (,@lambda-list ,start ,end)
+                          (declare (ignore ,@ignore))
+                          ,@forms)))))
             ((:function)
-             (setf transform `(lambda (result start end)
-                                (declare (ignore start end))
-                                (funcall (function ,(second option)) result))))
+             (setf transform `(lambda/bounds (function ,(second option)))))
             ((:destructure)
              (destructuring-bind (lambda-list &body forms) (cdr option)
-               (multiple-value-bind (lambda-list start-var end-var)
+               (multiple-value-bind (lambda-list start end ignore)
                    (parse-lambda-list-maybe-containing-&bounds lambda-list)
                  (setf transform
-                       (with-gensyms (production start end)
-                         `(lambda (,production ,(or start-var start) ,(or end-var end))
-                            (declare (ignore ,@(unless start-var `(,start))
-                                             ,@(unless end-var   `(,end))))
+                       (with-gensyms (production)
+                         `(lambda (,production ,start ,end)
+                            (declare (ignore ,@ignore))
                             (destructuring-bind ,lambda-list ,production
                               ,@forms)))))))))))
     `(eval-when (:load-toplevel :execute)
        (add-rule ',symbol (make-instance 'rule
                                          :expression ',expression
                                          :guard-expression ',guard
-                                         :transform ,(or transform '(lambda (result start end)
-                                                                     (declare (ignore start end))
-                                                                     result))
+                                         :transform ,(or transform '#'identity/bounds)
                                          :condition ,condition)))))
 
 (defun add-rule (symbol rule)
@@ -755,7 +763,7 @@ inspection."
                                          position)
                            :detail result)
                           (make-result
-                           :position   (result-position result)
+                           :position (result-position result)
                            :production (funcall transform
                                                 (result-production result)
                                                 position
