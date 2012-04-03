@@ -95,8 +95,52 @@
   (is (equal '(123 45 6789 0) (parse 'list-of-integers "123, 45  ,   6789, 0")))
   (is (equal '(123 45 6789 0) (parse 'list-of-integers "  123 ,45,6789, 0  "))))
 
+(defrule single-token/bounds.1 (+ (not-space character))
+  (:lambda (result &bounds start end)
+    (format nil "~A[~S-~S]" (text result) start end)))
+
+(defrule single-token/bounds.2 (and (not-space character) (* (not-space character)))
+  (:destructure (first &rest rest &bounds start end)
+    (format nil "~C~A(~S-~S)" first (text rest) start end)))
+
+(defrule tokens/bounds.1 (and (? whitespace)
+                              (or (and single-token/bounds.1 whitespace tokens/bounds.1)
+                                  single-token/bounds.1))
+  (:destructure (whitespace match)
+    (declare (ignore whitespace))
+    (if (stringp match)
+        (list match)
+        (destructuring-bind (token whitespace list) match
+          (declare (ignore whitespace))
+          (cons token list)))))
+
+(defrule tokens/bounds.2 (and (? whitespace)
+                              (or (and single-token/bounds.2 whitespace tokens/bounds.2)
+                                  single-token/bounds.2))
+  (:destructure (whitespace match)
+    (declare (ignore whitespace))
+    (if (stringp match)
+        (list match)
+        (destructuring-bind (token whitespace list) match
+          (declare (ignore whitespace))
+          (cons token list)))))
+
+(defun bounds-test.1 ()
+  (is (equal '("foo[0-3]")
+             (parse 'tokens/bounds.1 "foo")))
+  (is (equal '("foo[0-3]" "bar[4-7]" "quux[11-15]")
+             (parse 'tokens/bounds.1 "foo bar    quux"))))
+
+(defun bounds-test.2 ()
+  (is (equal '("foo(0-3)")
+             (parse 'tokens/bounds.2 "foo")))
+  (is (equal '("foo(0-3)" "bar(4-7)" "quux(11-15)")
+             (parse 'tokens/bounds.2 "foo bar    quux"))))
+
 (test esrap
-  (smoke-test))
+  (smoke-test)
+  (bounds-test.1)
+  (bounds-test.2))
 
 (defun run-tests ()
   (let ((results (run 'esrap)))
