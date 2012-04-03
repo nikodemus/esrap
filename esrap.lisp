@@ -665,9 +665,11 @@ break is entered when the rule is invoked."
             (trace-rule dep :recursive t :break break))))
       t)))
 
-(defun untrace-rule (symbol &key recursive)
+(defun untrace-rule (symbol &key recursive break)
   "Turn off tracing of nonterminal SYMBOL. If RECURSIVE is true, untraces the
-whole grammar rooted at SYMBOL."
+whole grammar rooted at SYMBOL. BREAK is ignored, and is provided only for
+symmetry with TRACE-RULE."
+  (declare (ignore break))
   (unless (member symbol *trace-stack* :test #'eq)
     (let ((cell (find-rule-cell symbol)))
       (unless cell
