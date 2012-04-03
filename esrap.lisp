@@ -42,6 +42,7 @@
    #:concat
    #:defrule
    #:describe-grammar
+   #:compile-grammar
    #:find-rule
    #:parse
    #:remove-rule
@@ -52,6 +53,7 @@
    #:text
    #:trace-rule
    #:untrace-rule
+   #:*rules*
    ))
 
 (in-package :esrap)
@@ -380,6 +382,9 @@ symbols."
 
 ;;; MAIN INTERFACE
 
+(defun compile-grammar (expression)
+  (compile-expression expression))
+
 (defun parse (expression text &key (start 0) end junk-allowed)
   "Parses TEXT using EXPRESSION from START to END. Incomplete parses
 are allowed only if JUNK-ALLOWED is true."
@@ -389,7 +394,9 @@ are allowed only if JUNK-ALLOWED is true."
   (let ((end (or end (length text))))
     (process-parse-result
      (let ((*cache* (make-cache)))
-       (eval-expression expression text start end))
+       (if (functionp expression)
+           (funcall expression text start end)
+           (eval-expression expression text start end)))
      text
      end
      junk-allowed)))
@@ -397,20 +404,8 @@ are allowed only if JUNK-ALLOWED is true."
 (define-compiler-macro parse (&whole form expression &rest arguments
                               &environment env)
   (if (constantp expression env)
-      (with-gensyms (expr-fun)
-        `(let ((,expr-fun (load-time-value (compile-expression ,expression))))
-           ;; This inline-lambda here provides keyword defaults and
-           ;; parsing, so the compiler-macro doesn't have to worry
-           ;; about evaluation order.
-           ((lambda (text &key (start 0) end junk-allowed)
-              (let ((*cache* (make-cache))
-                    (end (or end (length text))))
-                (process-parse-result
-                 (funcall ,expr-fun text start end)
-                 text
-                 end
-                 junk-allowed)))
-            ,@arguments)))
+      `(parse (load-time-value (compile-grammar ,expression))
+              ,@arguments)
       form))
 
 (defun process-parse-result (result text end junk-allowed)
