@@ -241,10 +241,22 @@ whatever the predicate function returns.</em>
 
           <p>If provided, same as using the corresponding lambda-expression with <code>:function</code>.
 
+          <p>As an extension of the standard lambda list syntax, <code>lambda-list</code> accepts
+    the optional pseudo lambda-list keyword <code>esrap:&amp;bounds</code>, which <code>(1) </code>must appear
+    after all standard lambda list keywords. <code>(2) </code>can be followed by one or two
+    variables to which bounding indexes of the matching substring are bound.
+
+          <p>Therefore:
+
+          <p><code>lambda-list</code> <code>::=</code> <code>(standard-lambda-list-elements [&amp;bounds start [end]])</code>
+
           <li><code>(:destructure destructuring-lambda-list &amp;body body)</code>
 
           <p>If provided, same as using a lambda-expression that destructures its argument
-    using <code>destructuring-bind</code> and the provided lambda-list with <code>:function</code>. 
+    using <code>destructuring-bind</code> and the provided lambda-list with <code>:function</code>.
+
+          <p><code>destructuring-lambda-list</code> can use <code>esrap:&amp;bounds</code> in the same way
+    as described for <code>:lambda</code>. 
 </ul>
         </p></blockquote></div>
 
@@ -350,9 +362,10 @@ break is entered when the rule is invoked.
    <p><a name="Function-untrace_002drule"></a>
 
 <div class="defun">
-&mdash; Function: <b>untrace-rule</b><var> symbol &amp;key recursive<a name="index-untrace_002drule-27"></a></var><br>
+&mdash; Function: <b>untrace-rule</b><var> symbol &amp;key recursive break<a name="index-untrace_002drule-27"></a></var><br>
 <blockquote><p><a name="index-untrace_002drule-28"></a>Turn off tracing of nonterminal <code>symbol</code>. If <code>recursive</code> is true, untraces the
-whole grammar rooted at <code>symbol</code>. 
+whole grammar rooted at <code>symbol</code>. <code>break</code> is ignored, and is provided only for
+symmetry with <code>trace-rule</code>. 
 </p></blockquote></div>
 
 </body></html>
