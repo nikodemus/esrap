@@ -1319,7 +1319,7 @@ inspection."
     (when tables
       (let ((table (make-hash-table :test #'eq)))
         (setf (gethash 'defrule table)
-              '(4 &lambda &rest (&whole 2 &lambda &body)))
+              '(4 4 &rest (&whole 2 &lambda &body)))
         (set tables (cons table (remove *indentation-hint-table* (symbol-value tables))))
         (setf *indentation-hint-table* table))
       t)))
