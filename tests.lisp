@@ -87,7 +87,7 @@
              (parse 'trimmed-lines "1,
                                     2,
 
-                                    3,    
+                                    3,
                                     4.")))
   (is (eql 123 (parse 'integer "  123")))
   (is (eql 123 (parse 'integer "  123  ")))
@@ -191,13 +191,71 @@
     (is (equal "Foo" t3c))
     (is (equal "Foo" t3e))))
 
+(declaim (special *depth*))
+(defvar *depth* nil)
+
+(defrule around/inner
+    (+ (alpha-char-p character))
+  (:text t))
+
+(defrule around.1
+    (or around/inner
+        (and #\{ around.1 #\}))
+  (:lambda (thing)
+    (if (stringp thing)
+        (cons *depth* thing)
+        (second thing)))
+  (:around ()
+    (let ((*depth* (if *depth*
+                       (cons (1+ (first *depth*)) *depth*)
+                       (list 0))))
+      (call-transform))))
+
+(defrule around.2
+    (or around/inner
+        (and #\{ around.2 #\}))
+  (:lambda (thing)
+    (if (stringp thing)
+        (cons *depth* thing)
+        (second thing)))
+  (:around (&bounds start end)
+    (let ((*depth* (if *depth*
+                       (cons (cons (1+ (car (first *depth*))) (cons start end))
+                             *depth*)
+                       (list (cons 0 (cons start end))))))
+      (call-transform))))
+
+(defun around-test.1 ()
+  "Test executing code around the transform of a rule."
+  (macrolet ((test-case (input expected)
+               `(is (equal (parse 'around.1 ,input) ,expected))))
+    (test-case "foo"     '((0) . "foo"))
+    (test-case "{bar}"   '((1 0) . "bar"))
+    (test-case "{{baz}}" '((2 1 0) . "baz"))))
+
+(defun around-test.2 ()
+  "Test executing code around the transform of a rule."
+  (macrolet ((test-case (input expected)
+               `(is (equal (parse 'around.2 ,input) ,expected))))
+    (test-case "foo"     '(((0 . (0 . 3)))
+                           . "foo"))
+    (test-case "{bar}"   '(((1 . (1 . 4))
+                            (0 . (0 . 5)))
+                           . "bar"))
+    (test-case "{{baz}}" '(((2 . (2 . 5))
+                            (1 . (1 . 6))
+                            (0 . (0 . 7)))
+                           . "baz"))))
+
 (test esrap
   (smoke-test)
   (bounds-test.1)
   (bounds-test.2)
   (condition-test.1)
   (condition-test.2)
-  (negation-test))
+  (negation-test)
+  (around-test.1)
+  (around-test.2))
 
 (defun run-tests ()
   (let ((results (run 'esrap)))

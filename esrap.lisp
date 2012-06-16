@@ -39,6 +39,7 @@
    #:! #:? #:+ #:* #:& #:~
 
    #:add-rule
+   #:call-transform
    #:change-rule
    #:concat
    #:defrule
@@ -317,7 +318,11 @@ and expressions of the form \(~ <literal>) denote case-insensitive terminals."
    (%transform
     :initarg :transform
     :initform nil
-    :reader rule-transform)))
+    :reader rule-transform)
+   (%around
+    :initarg :around
+    :initform nil
+    :reader rule-around)))
 
 (defun rule-symbol (rule)
   "Returns the nonterminal associated with the RULE, or NIL of the rule
@@ -577,8 +582,25 @@ Following OPTIONS can be specified:
 
     DESTRUCTURING-LAMBDA-LIST can use ESRAP:&BOUNDS in the same way
     as described for :LAMBDA.
+
+  * (:AROUND ([&BOUNDS START [END]]) &BODY BODY)
+
+    If provided, execute BODY around the construction of the
+    production of the rule. BODY has to call ESRAP:CALL-TRANSFORM to
+    trigger the computation of the, potentially transformed,
+    production. Any transformation provided via :LAMBDA, :FUNCTION
+    or :DESTRUCTURE is executed inside the call to
+    ESRAP:CALL-TRANSFORM. As a result, modification to the dynamic
+    state are visible within the transform.
+
+    ESRAP:&BOUNDS can be used in the same way as described for :LAMBDA
+    and :DESTRUCTURE.
+
+    This option can be used to safely track nesting depth, manage
+    symbol tables or for other stack-like operations.
 "
   (let ((transform nil)
+        (around nil)
         (guard t)
         (condition t)
         (guard-seen nil))
@@ -635,12 +657,24 @@ Following OPTIONS can be specified:
                          `(lambda (,production ,start ,end)
                             (declare (ignore ,@ignore))
                             (destructuring-bind ,lambda-list ,production
-                              ,@forms)))))))))))
+                              ,@forms)))))))
+            ((:around)
+             (destructuring-bind (lambda-list &body forms) (cdr option)
+               (multiple-value-bind (lambda-list start end ignore)
+                   (parse-lambda-list-maybe-containing-&bounds lambda-list)
+                 (assert (null lambda-list))
+                 (setf around `(lambda (,start ,end transform)
+                                 (declare (ignore ,@ignore)
+                                          (function transform))
+                                 (flet ((call-transform ()
+                                          (funcall transform)))
+                                   ,@forms))))))))))
     `(eval-when (:load-toplevel :execute)
        (add-rule ',symbol (make-instance 'rule
                                          :expression ',expression
                                          :guard-expression ',guard
                                          :transform ,(or transform '#'identity/bounds)
+                                         :around ,around
                                          :condition ,condition)))))
 
 (defun add-rule (symbol rule)
@@ -656,7 +690,8 @@ associated with a rule, the old rule is removed first."
          (function (compile-rule symbol
                                  (rule-expression rule)
                                  (rule-condition rule)
-                                 (rule-transform rule)))
+                                 (rule-transform rule)
+                                 (rule-around rule)))
          (trace-info (cell-trace-info cell)))
     (set-cell-info cell function rule)
     (setf (cell-trace-info cell) nil)
@@ -827,8 +862,8 @@ inspection."
 
 (defvar *current-rule* nil)
 
-(defun compile-rule (symbol expression condition transform)
-  (declare (type (or boolean function) condition transform))
+(defun compile-rule (symbol expression condition transform around)
+  (declare (type (or boolean function) condition transform around))
   (let* ((*current-rule* symbol)
          ;; Must bind *CURRENT-RULE* before compiling the expression!
          (function (compile-expression expression))
@@ -847,12 +882,21 @@ inspection."
                                          (failed-parse-position result)
                                          position)
                            :detail result)
-                          (make-result
-                           :position (result-position result)
-                           :production (funcall transform
-                                                (result-production result)
-                                                position
-                                                (result-position result)))))))
+                          (if around
+                              (make-result
+                               :position (result-position result)
+                               :production (flet ((call-rule ()
+                                                    (funcall transform
+                                                             (result-production result)
+                                                             position
+                                                             (result-position result))))
+                                             (funcall around position (result-position result) #'call-rule)))
+                              (make-result
+                               :position (result-position result)
+                               :production (funcall transform
+                                                    (result-production result)
+                                                    position
+                                                    (result-position result))))))))
              (if (eq t condition)
                  (named-lambda rule/transform (text position end)
                    (with-cached-result (symbol position text)

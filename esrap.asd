@@ -28,6 +28,7 @@
   :depends-on (:alexandria)
   :components ((:file "esrap")
                (:static-file "example-sexp.lisp")
+               (:static-file "example-symbol-table.lisp")
                (:static-file "README")))
 
 (defsystem :esrap-tests
