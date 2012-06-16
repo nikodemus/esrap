@@ -25,6 +25,9 @@
 
 (in-package :esrap-tests)
 
+(def-suite esrap)
+(in-suite esrap)
+
 ;;;; A few semantic predicates
 
 (defun not-doublequote (char)
@@ -82,7 +85,7 @@
           (declare (ignore comma))
           (cons int list)))))
 
-(defun smoke-test ()
+(test smoke
   (is (equal '("1," "2," "" "3," "4.")
              (parse 'trimmed-lines "1,
                                     2,
@@ -127,19 +130,21 @@
 
 (defrule left-recursion (and left-recursion "l"))
 
-(defun bounds-test.1 ()
+(test bounds.1
   (is (equal '("foo[0-3]")
              (parse 'tokens/bounds.1 "foo")))
   (is (equal '("foo[0-3]" "bar[4-7]" "quux[11-15]")
              (parse 'tokens/bounds.1 "foo bar    quux"))))
 
-(defun bounds-test.2 ()
+(test bounds.2
   (is (equal '("foo(0-3)")
              (parse 'tokens/bounds.2 "foo")))
   (is (equal '("foo(0-3)" "bar(4-7)" "quux(11-15)")
              (parse 'tokens/bounds.2 "foo bar    quux"))))
 
-(defun condition-test.1 ()
+(test condition.1
+  "Test signaling of `esrap-simple-parse-error' conditions for failed
+   parses."
   (macrolet
       ((signals-esrap-error ((input position &optional messages) &body body)
          `(progn
@@ -164,7 +169,8 @@
                                    "Encountered at"))
       (parse 'list-of-integers "1, "))))
 
-(defun condition-test.2 ()
+(test condition.2
+  "Test signaling of `left-recursion' condition."
   (signals (left-recursion)
     (parse 'left-recursion "l"))
   (handler-case (parse 'left-recursion "l")
@@ -176,7 +182,8 @@
       (is (equal (left-recursion-path condition)
                  '(left-recursion left-recursion))))))
 
-(defun negation-test ()
+(test negation
+  "Test negation in rules."
   (let* ((text "FooBazBar")
          (t1c (text (parse '(+ (not "Baz")) text :junk-allowed t)))
          (t1e (text (parse (identity '(+ (not "Baz"))) text :junk-allowed t)))
@@ -225,7 +232,7 @@
                        (list (cons 0 (cons start end))))))
       (call-transform))))
 
-(defun around-test.1 ()
+(test around.1
   "Test executing code around the transform of a rule."
   (macrolet ((test-case (input expected)
                `(is (equal (parse 'around.1 ,input) ,expected))))
@@ -233,7 +240,7 @@
     (test-case "{bar}"   '((1 0) . "bar"))
     (test-case "{{baz}}" '((2 1 0) . "baz"))))
 
-(defun around-test.2 ()
+(test around.2
   "Test executing code around the transform of a rule."
   (macrolet ((test-case (input expected)
                `(is (equal (parse 'around.2 ,input) ,expected))))
@@ -246,16 +253,6 @@
                             (1 . (1 . 6))
                             (0 . (0 . 7)))
                            . "baz"))))
-
-(test esrap
-  (smoke-test)
-  (bounds-test.1)
-  (bounds-test.2)
-  (condition-test.1)
-  (condition-test.2)
-  (negation-test)
-  (around-test.1)
-  (around-test.2))
 
 (defun run-tests ()
   (let ((results (run 'esrap)))
