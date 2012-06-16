@@ -36,6 +36,16 @@
   (:export
    #:&bounds
 
+   #:format-error-position
+   #:esrap-error
+   #:esrap-parse-error
+   #:esrap-parse-error-text
+   #:esrap-parse-error-position
+   #:simple-esrap-parse-error
+   #:left-recursion
+   #:left-recursion-nonterminal
+   #:left-recursion-path
+
    #:! #:? #:+ #:* #:& #:~
    #:add-rule
    #:change-rule
@@ -51,10 +61,130 @@
    #:rule-symbol
    #:text
    #:trace-rule
-   #:untrace-rule
-   ))
+   #:untrace-rule))
 
 (in-package :esrap)
+
+;;; CONDITIONS
+
+(define-condition esrap-error (error)
+  ()
+  (:documentation
+   "Superclass of all esrap error conditions."))
+
+(define-condition esrap-parse-error (error)
+  ((text     :initarg  :text
+             :type     string
+             :reader   esrap-parse-error-text
+             :documentation
+             "The source string which was being parsed when the error
+              was encountered.")
+   (position :initarg  :position
+             :type     (or null (interger 0))
+             :reader   esrap-parse-error-position
+             :initform nil
+             :documentation
+             "The position in the source string at which the error was
+              encountered or nil if the position is not available."))
+  (:default-initargs
+   :text (required-argument :text))
+  (:report (lambda (condition stream)
+             (format stream "~@<Parse error~/esrap::format-error-position/~@:>"
+                     condition)))
+  (:documentation
+   "Instances of this error and its subclasses are signaled when an
+esrap parse fails."))
+
+(define-condition simple-esrap-parse-error (esrap-parse-error
+                                            simple-error)
+  ()
+  (:report (lambda (condition stream)
+             (format stream "~?~/esrap::format-error-position/"
+                     (simple-condition-format-control condition)
+                     (simple-condition-format-arguments condition)
+                     condition)))
+  (:documentation
+   "Like `esrap-parse-error' but additionally accepts format-control
+and format-arguments like `cl:simple-error'."))
+
+(defun simple-esrap-parse-error (text position format-control
+                                 &rest format-arguments)
+  "Signal a `simple-esrap-parse-error' for an error which occurred at
+POSITION of TEXT. FORMAT-CONTROL and FORMAT-ARGUMENTS work as for
+`cl:simple-error' s produced by `cl:error'."
+  (error 'simple-esrap-parse-error
+         :text             text
+         :position         position
+         :format-control   format-control
+         :format-arguments format-arguments))
+
+(define-condition left-recursion (esrap-parse-error)
+  ((nonterminal :initarg  :nonterminal
+                :type     symbol
+                :reader   left-recursion-nonterminal
+                :documentation
+                "The symbol naming the nonterminal for which the left
+                 recursion has been detected.")
+   (path        :initarg  :path
+                :type     list
+                :reader   left-recursion-path
+                :documentation
+                "A list of names of the nonterminals of which the left
+                 recursion cycle consists."))
+  (:default-initargs
+   :nonterminal (required-argument :nonterminal)
+   :path        (required-argument :path))
+  (:report (lambda (condition stream)
+             (format stream "Left recursion in nonterminal ~S. ~_Path: ~
+                             ~{~S~^ -> ~}~/esrap::format-error-position/"
+                     (left-recursion-nonterminal condition)
+                     (left-recursion-path        condition)
+                     condition)))
+  (:documentation
+   "This error is signaled when left recursion is detected during
+parsing."))
+
+(defun format-error-position (stream condition &optional at-p colon-p)
+  "Format the position information contained in CONDITION onto
+STREAM."
+  (declare (ignore at-p colon-p))
+  (when (or (not *print-lines*) (> *print-lines* 1))
+    (if-let ((text     (esrap-parse-error-text     condition))
+             (position (esrap-parse-error-position condition)))
+      (let* ((line   (count #\Newline text :end position))
+             (column (- position (or (position #\Newline text
+                                               :end      position
+                                               :from-end t)
+                                     0)
+                        1))
+             (start (or (position #\Newline text
+                                  :start    (max 0 (- position 32))
+                                  :end      (max 0 (- position 24))
+                                  :from-end t)
+                        (max 0 (- position 24))))
+             (end (min (length text) (+ position 24)))
+             (newline (or (position #\Newline text
+                                    :start    start
+                                    :end      position
+                                    :from-end t)
+                          start))
+             (*print-circle* nil))
+        (format stream
+                "~2&  Encountered at:~&    ~V@Tv (Line ~D, Column ~D, Position ~
+                 ~D)~&~@<  | ~@;~A~:@>"
+                (- position newline)
+                (1+ line) (1+ column)
+                position
+                (if (emptyp text)
+                    ""
+                    (concatenate 'string
+                                 (subseq text start position)
+                                 ">"
+                                 (subseq text position (1+ position))
+                                 "<"
+                                 (subseq text (1+ position) end)))))
+      (format stream "~2&  <Input and position information not ~
+                    available>"))))
 
 ;;; Miscellany
 
@@ -315,14 +445,17 @@ symbols."
 (defvar *nonterminal-stack* nil)
 
 ;;; SYMBOL, POSITION, and CACHE must all be lexical variables!
-(defmacro with-cached-result ((symbol position) &body forms)
+(defmacro with-cached-result ((symbol position &optional (text nil)) &body forms)
   (with-gensyms (cache result)
     `(let* ((,cache *cache*)
             (,result (get-cached ,symbol ,position ,cache))
             (*nonterminal-stack* (cons ,symbol *nonterminal-stack*)))
        (cond ((eq t ,result)
-              (error "Left recursion in nonterminal ~S, at ~S.~%Path: ~{~S~^ -> ~}"
-                     ,symbol ,position (nreverse *nonterminal-stack*)))
+              (error 'left-recursion
+                     :text        ,text
+                     :position    ,position
+                     :nonterminal ,symbol
+                     :path        (nreverse *nonterminal-stack*)))
              (,result
               ,result)
              (t
@@ -418,31 +551,28 @@ are allowed only if JUNK-ALLOWED is true."
       (if junk-allowed
           (values nil 0)
           (if (failed-parse-p result)
-              (error "Parse error:~%~A"
-                     (with-output-to-string (s)
-                       (format s " Expression ~S"
-                               (failed-parse-expression result))
-                       (labels ((rec (e)
-                                  (when e
-                                    (format s "~&   subexpression ~S"
-                                            (failed-parse-expression e))
-                                    (rec (failed-parse-detail e)))))
-                         (rec (failed-parse-detail result))
-                         (let* ((position (failed-parse-position result))
-                                (start (max 0 (- position 24)))
-                                (end (min (length text) (+ position 24))))
-                           (format s "~& failed at:~&   \"~A\"" (subseq text start end))
-                           (format s "~&    ~A^"
-                                   (make-string (- position start)
-                                                :initial-element #\space))))))
-              (error "Parse error: rule ~S not active"
-                     (inactive-rule-name result))))
+              (labels ((expressions (e)
+                         (when e
+                           (cons (failed-parse-expression e)
+                                 (expressions (failed-parse-detail e))))))
+                (let ((expressions (expressions result)))
+                  (simple-esrap-parse-error
+                   text (failed-parse-position result)
+                   "Could not parse subexpression ~S when parsing~2&~<  ~
+                    Expression ~S~@{~&    Subexpression ~S~}~:>"
+                   (lastcar expressions)
+                   expressions)))
+              (simple-esrap-parse-error
+               text nil "rule ~S not active"
+               (inactive-rule-name result))))
       (let ((position (result-position result)))
         (values (result-production result)
                 (when (< position end)
                   (if junk-allowed
                       position
-                      (error "Incomplete parse, stopped at ~S." position)))))))
+                      (simple-esrap-parse-error
+                       text position
+                       "Incomplete parse.")))))))
 
 (defmacro defrule (&whole form symbol expression &body options)
   "Define SYMBOL as a nonterminal, using EXPRESSION as associated the parsing expression.
@@ -772,20 +902,20 @@ inspection."
                                                 (result-position result)))))))
              (if (eq t condition)
                  (named-lambda rule/transform (text position end)
-                   (with-cached-result (symbol position)
+                   (with-cached-result (symbol position text)
                      (exec-rule/transform text position end)))
                  (named-lambda condition-rule/transform (text position end)
-                   (with-cached-result (symbol position)
+                   (with-cached-result (symbol position text)
                      (if (funcall condition)
                          (exec-rule/transform text position end)
                          rule-not-active))))))
           (t
            (if (eq t condition)
                (named-lambda rule (text position end)
-                 (with-cached-result (symbol position)
+                 (with-cached-result (symbol position text)
                    (funcall function text position end)))
                (named-lambda conditional-rule (text position end)
-                 (with-cached-result (symbol position)
+                 (with-cached-result (symbol position text)
                    (if (funcall condition)
                        (funcall function text position end)
                        rule-not-active))))))))

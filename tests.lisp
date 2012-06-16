@@ -125,6 +125,8 @@
           (declare (ignore whitespace))
           (cons token list)))))
 
+(defrule left-recursion (and left-recursion "l"))
+
 (defun bounds-test.1 ()
   (is (equal '("foo[0-3]")
              (parse 'tokens/bounds.1 "foo")))
@@ -137,10 +139,49 @@
   (is (equal '("foo(0-3)" "bar(4-7)" "quux(11-15)")
              (parse 'tokens/bounds.2 "foo bar    quux"))))
 
+(defun condition-test.1 ()
+  (macrolet
+      ((signals-parse-error ((input position &optional messages) &body body)
+         `(progn
+            (signals (esrap-parse-error)
+              ,@body)
+            (handler-case (progn ,@body)
+              (esrap-parse-error (condition)
+                (is (string= (esrap-parse-error-text     condition) ,input))
+                (is (=       (esrap-parse-error-position condition) ,position))
+		,@(when messages
+		    `((let ((report (princ-to-string condition)))
+			,@(mapcar (lambda (message)
+				    `(is (search ,message report)))
+				  (ensure-list messages))))))))))
+    (signals-parse-error ("" 0 ("Could not parse subexpression"
+				"Encountered at"))
+      (parse 'integer ""))
+    (signals-parse-error ("123foo" 3 ("Could not parse subexpression"
+				      "Encountered at"))
+      (parse 'integer "123foo"))
+    (signals-parse-error ("1, " 1 ("Incomplete parse."
+				   "Encountered at"))
+      (parse 'list-of-integers "1, "))))
+
+(defun condition-test.2 ()
+  (signals (left-recursion)
+    (parse 'left-recursion "l"))
+  (handler-case (parse 'left-recursion "l")
+    (left-recursion (condition)
+      (is (string= (esrap-parse-error-text     condition) "l"))
+      (is (=       (esrap-parse-error-position condition) 0))
+      (is (eq      (left-recursion-nonterminal condition)
+                   'left-recursion))
+      (is (equal   (left-recursion-path        condition)
+                   '(left-recursion left-recursion))))))
+
 (test esrap
   (smoke-test)
   (bounds-test.1)
-  (bounds-test.2))
+  (bounds-test.2)
+  (condition-test.1)
+  (condition-test.2))
 
 (defun run-tests ()
   (let ((results (run 'esrap)))

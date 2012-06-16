@@ -192,6 +192,11 @@ whatever the predicate function returns.}
 
 @chapter Dictionary
 
+@include condition-esrap-esrap-error.texinfo
+@include condition-esrap-esrap-parse-error.texinfo
+@include condition-esrap-simple-esrap-parse-error.texinfo
+@include condition-esrap-left-recursion.texinfo
+
 @include include/macro-esrap-defrule.texinfo
 
 @include include/fun-esrap-add-rule.texinfo
