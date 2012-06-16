@@ -192,20 +192,32 @@ whatever the predicate function returns.}
 
 @chapter Dictionary
 
+@section Primary Interface
+
 @include include/macro-esrap-defrule.texinfo
+@include include/fun-esrap-parse.texinfo
+@include include/fun-esrap-describe-grammar.texinfo
+
+@section Utilities
+
+@include include/fun-esrap-text.texinfo
+
+@section Introspection and Intercession
 
 @include include/fun-esrap-add-rule.texinfo
 @include include/fun-esrap-change-rule.texinfo
-@include include/fun-esrap-describe-grammar.texinfo
 @include include/fun-esrap-find-rule.texinfo
-@include include/fun-esrap-parse.texinfo
 @include include/fun-esrap-remove-rule.texinfo
 @include include/fun-esrap-rule-dependencies.texinfo
 @include include/fun-esrap-rule-expression.texinfo
 @include include/fun-esrap-setf-rule-expression.texinfo
 @include include/fun-esrap-rule-symbol.texinfo
-@include include/fun-esrap-text.texinfo
 @include include/fun-esrap-trace-rule.texinfo
 @include include/fun-esrap-untrace-rule.texinfo
+
+@section Error Conditions
+
+@include include/condition-esrap-esrap-error.texinfo
+@include include/condition-esrap-left-recursion.texinfo
 
 @bye
