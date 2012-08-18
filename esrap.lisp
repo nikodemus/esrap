@@ -50,6 +50,7 @@
    #:left-recursion
    #:left-recursion-nonterminal
    #:left-recursion-path
+   #:make-grammar
    #:parse
    #:remove-rule
    #:rule
@@ -235,15 +236,31 @@ and expressions of the form \(~ <literal>) denote case-insensitive terminals."
 
 ;;; RULE REPRESENTATION AND STORAGE
 ;;;
-;;; For each rule, there is a RULE-CELL in *RULES*, whose %INFO slot has the
+;;; For each rule, there is a RULE-CELL in GRAMMAR-RULES, whose %INFO slot has the
 ;;; function that implements the rule in car, and the rule object in CDR. A
 ;;; RULE object can be attached to only one non-terminal at a time, which is
 ;;; accessible via RULE-SYMBOL.
 
-(defvar *rules* (make-hash-table))
+;; Alternatives
 
-(defun clear-rules ()
-  (clrhash *rules*)
+;; (defun make-grammar () (make-hash-table))
+;; needs using of `grammar' instead of `(grammar-rules grammar)'
+
+;; or
+
+;; (defclass grammar ()
+;;     (rules :initform (make-hash-table) :accessor grammar-rules))
+
+;; (defun make-grammar ()
+;;   (make-instance 'grammar))
+
+;; And the most simple and perspective variant
+
+(defstruct (grammar (:conc-name grammar-))
+  (rules (make-hash-table)))
+
+(defun clear-rules (grammar)
+  (clrhash (grammar-rules grammar))
   nil)
 
 (defstruct (rule-cell (:constructor
@@ -272,30 +289,30 @@ and expressions of the form \(~ <literal>) denote case-insensitive terminals."
     (declare (ignore args))
     (error "Undefined rule: ~S" symbol)))
 
-(defun ensure-rule-cell (symbol)
+(defun ensure-rule-cell (grammar symbol)
   (check-type symbol nonterminal)
-  ;; FIXME: Need to lock *RULES*.
-  (or (gethash symbol *rules*)
-      (setf (gethash symbol *rules*)
+  ;; FIXME: Need to lock GRAMMAR-RULES.
+  (or (gethash symbol (grammar-rules grammar))
+      (setf (gethash symbol (grammar-rules grammar))
             (make-rule-cell symbol))))
 
-(defun delete-rule-cell (symbol)
-  (remhash symbol *rules*))
+(defun delete-rule-cell (grammar symbol)
+  (remhash symbol (grammar-rules grammar)))
 
-(defun reference-rule-cell (symbol referent)
-  (let ((cell (ensure-rule-cell symbol)))
+(defun reference-rule-cell (grammar symbol referent)
+  (let ((cell (ensure-rule-cell grammar symbol)))
     (when referent
       (pushnew referent (cell-referents cell)))
     cell))
 
-(defun dereference-rule-cell (symbol referent)
-  (let ((cell (ensure-rule-cell symbol)))
+(defun dereference-rule-cell (grammar symbol referent)
+  (let ((cell (ensure-rule-cell grammar symbol)))
     (setf (cell-referents cell) (delete referent (cell-referents cell)))
     cell))
 
-(defun find-rule-cell (symbol)
+(defun find-rule-cell (grammar symbol)
   (check-type symbol nonterminal)
-  (gethash symbol *rules*))
+  (gethash symbol (grammar-rules grammar)))
 
 (defclass rule ()
   ((%symbol
@@ -324,9 +341,9 @@ and expressions of the form \(~ <literal>) denote case-insensitive terminals."
 is not attached to any nonterminal."
   (slot-value rule '%symbol))
 
-(defun detach-rule (rule)
+(defun detach-rule (grammar rule)
   (dolist (dep (%rule-direct-dependencies rule))
-    (dereference-rule-cell dep (rule-symbol rule)))
+    (dereference-rule-cell grammar dep (rule-symbol rule)))
   (setf (slot-value rule '%symbol) nil))
 
 (defmethod shared-initialize :after ((rule rule) slots &key)
@@ -340,25 +357,27 @@ is not attached to any nonterminal."
           (format stream "(detached) ")))
     (write (rule-expression rule) :stream stream)))
 
-(defun sort-dependencies (symbol dependencies)
+(defun sort-dependencies (grammar symbol dependencies)
   (let ((symbols (delete symbol dependencies))
         (defined nil)
         (undefined nil))
     (dolist (sym symbols)
-      (if (find-rule sym)
+      (if (find-rule grammar sym)
           (push sym defined)
           (push sym undefined)))
     (values defined undefined)))
 
-(defun rule-dependencies (rule)
+(defun rule-dependencies (grammar rule)
   "Returns the dependencies of the RULE: primary value is a list of defined
 nonterminal symbols, and secondary value is a list of undefined nonterminal
 symbols."
   (sort-dependencies
-   (rule-symbol rule) (%expression-dependencies (rule-expression rule) nil)))
+   grammar
+   (rule-symbol rule) (%expression-dependencies grammar (rule-expression rule) nil)))
 
-(defun rule-direct-dependencies (rule)
+(defun rule-direct-dependencies (grammar rule)
   (sort-dependencies
+   grammar
    (rule-symbol rule) (%expression-direct-dependencies (rule-expression rule) nil)))
 
 (defun %rule-direct-dependencies (rule)
@@ -469,7 +488,7 @@ symbols."
 
 ;;; MAIN INTERFACE
 
-(defun parse (expression text &key (start 0) end junk-allowed)
+(defun parse (grammar expression text &key (start 0) end junk-allowed)
   "Parses TEXT using EXPRESSION from START to END. Incomplete parses
 are allowed only if JUNK-ALLOWED is true."
   ;; There is no backtracking in the toplevel expression -- so there's
@@ -478,16 +497,17 @@ are allowed only if JUNK-ALLOWED is true."
   (let ((end (or end (length text))))
     (process-parse-result
      (let ((*cache* (make-cache)))
-       (eval-expression expression text start end))
+       (eval-expression grammar expression text start end))
      text
      end
      junk-allowed)))
 
-(define-compiler-macro parse (&whole form expression &rest arguments
+(define-compiler-macro parse (&whole form grammar expression &rest arguments
                               &environment env)
   (if (constantp expression env)
       (with-gensyms (expr-fun)
-        `(let ((,expr-fun (load-time-value (compile-expression ,expression))))
+        `(let ((,expr-fun (load-time-value (compile-expression ,grammar
+							       ,expression))))
            ;; This inline-lambda here provides keyword defaults and
            ;; parsing, so the compiler-macro doesn't have to worry
            ;; about evaluation order.
@@ -527,7 +547,7 @@ are allowed only if JUNK-ALLOWED is true."
                       position
                       (simple-esrap-error text position "Incomplete parse.")))))))
 
-(defmacro defrule (&whole form symbol expression &body options)
+(defmacro defrule (&whole form grammar symbol expression &body options)
   "Define SYMBOL as a nonterminal, using EXPRESSION as associated the parsing expression.
 
 Following OPTIONS can be specified:
@@ -637,13 +657,14 @@ Following OPTIONS can be specified:
                             (destructuring-bind ,lambda-list ,production
                               ,@forms)))))))))))
     `(eval-when (:load-toplevel :execute)
-       (add-rule ',symbol (make-instance 'rule
-                                         :expression ',expression
-                                         :guard-expression ',guard
-                                         :transform ,(or transform '#'identity/bounds)
-                                         :condition ,condition)))))
+       (add-rule ,grammar ',symbol
+		 (make-instance 'rule
+				:expression ',expression
+				:guard-expression ',guard
+				:transform ,(or transform '#'identity/bounds)
+				:condition ,condition)))))
 
-(defun add-rule (symbol rule)
+(defun add-rule (grammar symbol rule)
   "Associates RULE with the nonterminal SYMBOL. Signals an error if the
 rule is already associated with a nonterminal. If the symbol is already
 associated with a rule, the old rule is removed first."
@@ -652,8 +673,9 @@ associated with a rule, the old rule is removed first."
   (when (rule-symbol rule)
     (error "~S is already associated with the nonterminal ~S -- remove it first."
            rule (rule-symbol rule)))
-  (let* ((cell (ensure-rule-cell symbol))
-         (function (compile-rule symbol
+  (let* ((cell (ensure-rule-cell grammar symbol))
+         (function (compile-rule grammar
+				 symbol
                                  (rule-expression rule)
                                  (rule-condition rule)
                                  (rule-transform rule)))
@@ -662,24 +684,24 @@ associated with a rule, the old rule is removed first."
     (setf (cell-trace-info cell) nil)
     (setf (slot-value rule '%symbol) symbol)
     (when trace-info
-      (trace-rule symbol :break (second trace-info)))
+      (trace-rule grammar symbol :break (second trace-info)))
     symbol))
 
-(defun find-rule (symbol)
+(defun find-rule (grammar symbol)
   "Returns rule designated by SYMBOL, if any. Symbol must be a nonterminal
 symbol."
   (check-type symbol nonterminal)
-  (let ((cell (find-rule-cell symbol)))
+  (let ((cell (find-rule-cell grammar symbol)))
     (when cell
       (cell-rule cell))))
 
-(defun remove-rule (symbol &key force)
+(defun remove-rule (grammar symbol &key force)
   "Makes the nonterminal SYMBOL undefined. If the nonterminal is defined an
 already referred to by other rules, an error is signalled unless :FORCE is
 true."
   (check-type symbol nonterminal)
   ;; FIXME: Lock and WITHOUT-INTERRUPTS.
-  (let* ((cell (find-rule-cell symbol))
+  (let* ((cell (find-rule-cell grammar symbol))
          (rule (cell-rule cell))
          (trace-info (cell-trace-info cell)))
     (when cell
@@ -688,7 +710,7 @@ true."
                (when trace-info
                  (setf (cell-trace-info cell) (list (cell-%info cell) (second trace-info))))
                (when rule
-                 (detach-rule rule))))
+                 (detach-rule grammar rule))))
         (cond ((and rule (cell-referents cell))
                (unless force
                  (error "Nonterminal ~S is used by other nonterminal~P:~% ~{~S~^, ~}"
@@ -699,24 +721,24 @@ true."
                ;; There are no references to the rule at all, so
                ;; we can remove the cell.
                (unless trace-info
-                 (delete-rule-cell symbol)))))
+                 (delete-rule-cell grammar symbol)))))
       rule)))
 
 (defvar *trace-level* 0)
 
 (defvar *trace-stack* nil)
 
-(defun trace-rule (symbol &key recursive break)
+(defun trace-rule (grammar symbol &key recursive break)
   "Turn on tracing of nonterminal SYMBOL. If RECURSIVE is true, turn
 on tracing for the whole grammar rooted at SYMBOL. If BREAK is true,
 break is entered when the rule is invoked."
   (unless (member symbol *trace-stack* :test #'eq)
-    (let ((cell (find-rule-cell symbol)))
+    (let ((cell (find-rule-cell grammar symbol)))
       (unless cell
         (error "Undefined rule: ~S" symbol))
       (when (cell-trace-info cell)
         (let ((*trace-stack* nil))
-          (untrace-rule symbol)))
+          (untrace-rule grammar symbol)))
       (let ((fun (cell-function cell))
             (rule (cell-rule cell))
             (info (cell-%info cell)))
@@ -745,16 +767,16 @@ break is entered when the rule is invoked."
       (when recursive
         (let ((*trace-stack* (cons symbol *trace-stack*)))
           (dolist (dep (%rule-direct-dependencies (cell-rule cell)))
-            (trace-rule dep :recursive t :break break))))
+            (trace-rule grammar dep :recursive t :break break))))
       t)))
 
-(defun untrace-rule (symbol &key recursive break)
+(defun untrace-rule (grammar symbol &key recursive break)
   "Turn off tracing of nonterminal SYMBOL. If RECURSIVE is true, untraces the
 whole grammar rooted at SYMBOL. BREAK is ignored, and is provided only for
 symmetry with TRACE-RULE."
   (declare (ignore break))
   (unless (member symbol *trace-stack* :test #'eq)
-    (let ((cell (find-rule-cell symbol)))
+    (let ((cell (find-rule-cell grammar symbol)))
       (unless cell
         (error "Undefined rule: ~S" symbol))
       (let ((trace-info (cell-trace-info cell)))
@@ -764,7 +786,7 @@ symmetry with TRACE-RULE."
         (when recursive
           (let ((*trace-stack* (cons symbol *trace-stack*)))
             (dolist (dep (%rule-direct-dependencies (cell-rule cell)))
-              (untrace-rule dep :recursive t))))))
+              (untrace-rule grammar dep :recursive t))))))
     nil))
 
 (defun rule-expression (rule)
@@ -781,28 +803,28 @@ detached beforehand."
              name))
     (setf (slot-value rule '%expression) expression)))
 
-(defun change-rule (symbol expression)
+(defun change-rule (grammar symbol expression)
   "Modifies the nonterminal SYMBOL to use EXPRESSION instead. Temporarily
 removes the rule while it is being modified."
-  (let ((rule (remove-rule symbol :force t)))
+  (let ((rule (remove-rule grammar symbol :force t)))
     (unless rule
       (error "~S is not a defined rule." symbol))
     (setf (rule-expression rule) expression)
-    (add-rule symbol rule)))
+    (add-rule grammar symbol rule)))
 
 (defun symbol-length (x)
   (length (symbol-name x)))
 
-(defun describe-grammar (symbol &optional (stream *standard-output*))
+(defun describe-grammar (grammar symbol &optional (stream *standard-output*))
   "Prints the grammar tree rooted at nonterminal SYMBOL to STREAM for human
 inspection."
   (check-type symbol nonterminal)
-  (let ((rule (find-rule symbol)))
+  (let ((rule (find-rule grammar symbol)))
     (cond ((not rule)
            (format stream "Symbol ~S is not a defined nonterminal." symbol))
           (t
            (format stream "~&Grammar ~S:~%" symbol)
-           (multiple-value-bind (defined undefined) (rule-dependencies rule)
+           (multiple-value-bind (defined undefined) (rule-dependencies grammar rule)
              (let ((length
                     (+ 4 (max (reduce #'max (mapcar #'symbol-length defined)
                                       :initial-value 0)
@@ -814,7 +836,7 @@ inspection."
                          (rule-guard-expression rule)))
                (when defined
                  (dolist (s defined)
-                   (let ((dep (find-rule s)))
+                   (let ((dep (find-rule grammar s)))
                      (format stream "~3T~S~VT<- ~S~@[ : ~S~]~%"
                             s length (rule-expression dep)
                             (when (rule-condition rule)
@@ -827,11 +849,11 @@ inspection."
 
 (defvar *current-rule* nil)
 
-(defun compile-rule (symbol expression condition transform)
+(defun compile-rule (grammar symbol expression condition transform)
   (declare (type (or boolean function) condition transform))
   (let* ((*current-rule* symbol)
          ;; Must bind *CURRENT-RULE* before compiling the expression!
-         (function (compile-expression expression))
+         (function (compile-expression grammar expression))
          (rule-not-active (when condition (make-inactive-rule :name symbol))))
     (cond ((not condition)
            (named-lambda inactive-rule (text position end)
@@ -903,7 +925,7 @@ inspection."
          nil))
       (invalid-expression-error expression)))
 
-(defun %expression-dependencies (expression seen)
+(defun %expression-dependencies (grammar expression seen)
   (etypecase expression
     ((member character)
      seen)
@@ -912,10 +934,10 @@ inspection."
     (nonterminal
      (if (member expression seen :test #'eq)
          seen
-         (let ((rule (find-rule expression))
+         (let ((rule (find-rule grammar expression))
                (seen (cons expression seen)))
            (if rule
-               (%expression-dependencies (rule-expression rule) seen)
+               (%expression-dependencies grammar (rule-expression rule) seen)
                seen))))
     (cons
      (case (car expression)
@@ -923,11 +945,11 @@ inspection."
         seen)
        ((and or)
         (dolist (subexpr (cdr expression) seen)
-          (setf seen (%expression-dependencies subexpr seen))))
+          (setf seen (%expression-dependencies grammar subexpr seen))))
        ((* + ? & !)
-        (%expression-dependencies (second expression) seen))
+        (%expression-dependencies grammar (second expression) seen))
        (t
-        (%expression-dependencies (second expression) seen))))))
+        (%expression-dependencies grammar (second expression) seen))))))
 
 (defun %expression-direct-dependencies (expression seen)
   (etypecase expression
@@ -949,7 +971,7 @@ inspection."
        (t
         (%expression-direct-dependencies (second expression) seen))))))
 
-(defun eval-expression (expression text position end)
+(defun eval-expression (grammar expression text position end)
   (typecase expression
     ((eql character)
      (eval-character text position end))
@@ -958,33 +980,33 @@ inspection."
          (eval-terminal (string (second expression)) text position end nil)
          (eval-terminal (string expression) text position end t)))
     (nonterminal
-     (eval-nonterminal expression text position end))
+     (eval-nonterminal grammar expression text position end))
     (cons
      (case (car expression)
        (string
         (eval-string expression text position end))
        (and
-        (eval-sequence expression text position end))
+        (eval-sequence grammar expression text position end))
        (or
-        (eval-ordered-choise expression text position end))
+        (eval-ordered-choise grammar expression text position end))
        (*
-        (eval-greedy-repetition expression text position end))
+        (eval-greedy-repetition grammar expression text position end))
        (+
-        (eval-greedy-positive-repetition expression text position end))
+        (eval-greedy-positive-repetition grammar expression text position end))
        (?
-        (eval-optional expression text position end))
+        (eval-optional grammar expression text position end))
        (&
-        (eval-followed-by expression text position end))
+        (eval-followed-by grammar expression text position end))
        (!
-        (eval-not-followed-by expression text position end))
+        (eval-not-followed-by grammar expression text position end))
        (t
         (if (symbolp (car expression))
-            (eval-semantic-predicate expression text position end)
+            (eval-semantic-predicate grammar expression text position end)
             (invalid-expression-error expression)))))
     (t
      (invalid-expression-error expression))))
 
-(defun compile-expression (expression)
+(defun compile-expression (grammar expression)
   (etypecase expression
     ((eql character)
      (compile-character))
@@ -993,28 +1015,28 @@ inspection."
          (compile-terminal (string (second expression)) nil)
          (compile-terminal (string expression) t)))
     (nonterminal
-     (compile-nonterminal expression))
+     (compile-nonterminal grammar expression))
     (cons
      (case (car expression)
        (string
         (compile-string expression))
        (and
-        (compile-sequence expression))
+        (compile-sequence grammar expression))
        (or
-        (compile-ordered-choise expression))
+        (compile-ordered-choise grammar expression))
        (*
-        (compile-greedy-repetition expression))
+        (compile-greedy-repetition grammar expression))
        (+
-        (compile-greedy-positive-repetition expression))
+        (compile-greedy-positive-repetition grammar expression))
        (?
-        (compile-optional expression))
+        (compile-optional grammar expression))
        (&
-        (compile-followed-by expression))
+        (compile-followed-by grammar expression))
        (!
-        (compile-not-followed-by expression))
+        (compile-not-followed-by grammar expression))
        (t
         (if (symbolp (car expression))
-            (compile-semantic-predicate expression)
+            (compile-semantic-predicate grammar expression)
             (invalid-expression-error expression)))))
     (t
      (invalid-expression-error expression))))
@@ -1085,13 +1107,13 @@ inspection."
 
 (defparameter *eval-nonterminals* nil)
 
-(defun eval-nonterminal (symbol text position end)
+(defun eval-nonterminal (grammar symbol text position end)
   (if *eval-nonterminals*
-      (eval-expression (rule-expression (find-rule symbol)) text position end)
-      (funcall (cell-function (ensure-rule-cell symbol)) text position end)))
+      (eval-expression grammar (rule-expression (find-rule grammar symbol)) text position end)
+      (funcall (cell-function (ensure-rule-cell grammar symbol)) text position end)))
 
-(defun compile-nonterminal (symbol)
-  (let ((cell (reference-rule-cell symbol *current-rule*)))
+(defun compile-nonterminal (grammar symbol)
+  (let ((cell (reference-rule-cell grammar symbol *current-rule*)))
     (declare (rule-cell cell))
     (named-lambda compile-nonterminal (text position end)
       (funcall (cell-function cell) text position end))))
@@ -1101,14 +1123,14 @@ inspection."
 ;;; FIXME: It might be better if we actually chained the closures
 ;;; here, instead of looping over them -- benchmark first, though.
 
-(defun eval-sequence (expression text position end)
+(defun eval-sequence (grammar expression text position end)
   (with-expression (expression (and &rest subexprs))
     (let (results)
       (dolist (expr subexprs
                (make-result
                 :position position
                 :production (mapcar #'result-production (nreverse results))))
-        (let ((result (eval-expression expr text position end)))
+        (let ((result (eval-expression grammar expr text position end)))
           (if (error-result-p result)
               (return (make-failed-parse
                        :expression expression
@@ -1117,9 +1139,11 @@ inspection."
               (setf position (result-position result)))
           (push result results))))))
 
-(defun compile-sequence (expression)
+(defun compile-sequence (grammar expression)
   (with-expression (expression (and &rest subexprs))
-    (let ((functions (mapcar #'compile-expression subexprs)))
+    (let ((functions (mapcar (lambda (subexpr)
+			       (compile-expression grammar subexpr))
+			     subexprs)))
       (named-lambda compiled-sequence (text position end)
           (let (results)
             (dolist (fun functions
@@ -1137,7 +1161,7 @@ inspection."
 
 ;;; Ordered choises
 
-(defun eval-ordered-choise (expression text position end)
+(defun eval-ordered-choise (grammar expression text position end)
   (with-expression (expression (or &rest subexprs))
     (let (last-error)
       (dolist (expr subexprs
@@ -1147,7 +1171,7 @@ inspection."
                               (failed-parse-position last-error)
                               position)
                 :detail last-error))
-        (let ((result (eval-expression expr text position end)))
+        (let ((result (eval-expression grammar expr text position end)))
           (if (error-result-p result)
               (when (or (and (not last-error)
                              (or (inactive-rule-p result)
@@ -1160,7 +1184,7 @@ inspection."
                 (setf last-error result))
               (return result)))))))
 
-(defun compile-ordered-choise (expression)
+(defun compile-ordered-choise (grammar expression)
   (with-expression (expression (or &rest subexprs))
     (let ((type :characters)
           (canonized nil))
@@ -1217,7 +1241,9 @@ inspection."
                                   :production choise))))))))
         (:general
          ;; In the general case, compile subexpressions and call.
-         (let ((functions (mapcar #'compile-expression subexprs)))
+         (let ((functions (mapcar (lambda (subexpr)
+				    (compile-expression grammar subexpr))
+				  subexprs)))
              (named-lambda compiled-ordered-choise (text position end)
                (let (last-error)
                  (dolist (fun functions
@@ -1243,12 +1269,12 @@ inspection."
 
 ;;; Greedy repetitions
 
-(defun eval-greedy-repetition (expression text position end)
-  (funcall (compile-greedy-repetition expression) text position end))
+(defun eval-greedy-repetition (grammar expression text position end)
+  (funcall (compile-greedy-repetition grammar expression) text position end))
 
-(defun compile-greedy-repetition (expression)
+(defun compile-greedy-repetition (grammar expression)
   (with-expression (expression (* subexpr))
-    (let ((function (compile-expression subexpr)))
+    (let ((function (compile-expression grammar subexpr)))
       (named-lambda compiled-greedy-repetition (text position end)
         (let ((results
                (loop for result = (funcall function text position end)
@@ -1261,13 +1287,13 @@ inspection."
 
 ;;; Greedy positive repetitions
 
-(defun eval-greedy-positive-repetition (expression text position end)
-  (funcall (compile-greedy-positive-repetition expression)
+(defun eval-greedy-positive-repetition (grammar expression text position end)
+  (funcall (compile-greedy-positive-repetition grammar expression)
            text position end))
 
-(defun compile-greedy-positive-repetition (expression)
+(defun compile-greedy-positive-repetition (grammar expression)
   (with-expression (expression (+ subexpr))
-    (let ((function (compile-expression subexpr)))
+    (let ((function (compile-expression grammar subexpr)))
       (named-lambda compiled-greedy-positive-repetition (text position end)
         (let* ((last nil)
                (results
@@ -1286,16 +1312,16 @@ inspection."
 
 ;;; Optionals
 
-(defun eval-optional (expression text position end)
+(defun eval-optional (grammar expression text position end)
   (with-expression (expression (? subexpr))
-    (let ((result (eval-expression subexpr text position end)))
+    (let ((result (eval-expression grammar subexpr text position end)))
       (if (error-result-p result)
           (make-result :position position)
           result))))
 
-(defun compile-optional (expression)
+(defun compile-optional (grammar expression)
   (with-expression (expression (? subexpr))
-    (let ((function (compile-expression subexpr)))
+    (let ((function (compile-expression grammar subexpr)))
       (named-lambda compiled-optional (text position end)
         (let ((result (funcall function text position end)))
           (if (error-result-p result)
@@ -1304,9 +1330,9 @@ inspection."
 
 ;;; Followed-by's
 
-(defun eval-followed-by (expression text position end)
+(defun eval-followed-by (grammar expression text position end)
   (with-expression (expression (& subexpr))
-    (let ((result (eval-expression subexpr text position end)))
+    (let ((result (eval-expression grammar subexpr text position end)))
       (if (error-result-p result)
           (make-failed-parse
            :position position
@@ -1316,9 +1342,9 @@ inspection."
            :position position
            :production (result-production result))))))
 
-(defun compile-followed-by (expression)
+(defun compile-followed-by (grammar expression)
   (with-expression (expression (& subexpr))
-    (let ((function (compile-expression subexpr)))
+    (let ((function (compile-expression grammar subexpr)))
       (named-lambda compiled-followed-by (text position end)
         (let ((result (funcall function text position end)))
           (if (error-result-p result)
@@ -1332,9 +1358,9 @@ inspection."
 
 ;;; Not followed-by's
 
-(defun eval-not-followed-by (expression text position end)
+(defun eval-not-followed-by (grammar expression text position end)
   (with-expression (expression (! subexpr))
-    (let ((result (eval-expression subexpr text position end)))
+    (let ((result (eval-expression grammar subexpr text position end)))
       (if (error-result-p result)
           (make-result
            :position position)
@@ -1342,9 +1368,9 @@ inspection."
            :expression expression
            :position position)))))
 
-(defun compile-not-followed-by (expression)
+(defun compile-not-followed-by (grammar expression)
   (with-expression (expression (! subexpr))
-    (let ((function (compile-expression subexpr)))
+    (let ((function (compile-expression grammar subexpr)))
       (named-lambda compiled-not-followed-by (text position end)
         (let ((result (funcall function text position end)))
           (if (error-result-p result)
@@ -1356,9 +1382,9 @@ inspection."
 
 ;;; Semantic predicates
 
-(defun eval-semantic-predicate (expression text position end)
+(defun eval-semantic-predicate (grammar expression text position end)
   (with-expression (expression (t subexpr))
-    (let ((result (eval-expression subexpr text position end)))
+    (let ((result (eval-expression grammar subexpr text position end)))
       (if (error-result-p result)
           (make-failed-parse
            :position position
@@ -1371,9 +1397,9 @@ inspection."
                  :position position
                  :expression expression)))))))
 
-(defun compile-semantic-predicate (expression)
+(defun compile-semantic-predicate (grammar expression)
   (with-expression (expression (t subexpr))
-    (let* ((function (compile-expression subexpr))
+    (let* ((function (compile-expression grammar subexpr))
            (predicate (car expression))
            ;; KLUDGE: Calling via a variable symbol can be slow, and if we
            ;; grab the SYMBOL-FUNCTION here we will not see redefinitions.

@@ -1,11 +1,9 @@
 ;;;; Esrap example: a simple S-expression grammar
 
-(require :esrap)
-
-(defpackage :sexp-grammar
+(defpackage :xml-sexp-grammar
   (:use :cl :esrap))
 
-(in-package :sexp-grammar)
+(in-package :xml-sexp-grammar)
 
 ;;; A semantic predicate for filtering out double quotes.
 
@@ -16,9 +14,9 @@
   (when (find-if-not #'digit-char-p string)
     t))
 
-;;; Utility rules.
-
 (defvar *sexp-grammar* (make-grammar))
+
+;;; Utility rules.
 
 (defrule *sexp-grammar* whitespace (+ (or #\space #\tab #\newline))
   (:constant nil))
@@ -30,9 +28,9 @@
 ;;; Here we go: an S-expression is either a list or an atom, with possibly leading whitespace.
 
 (defrule *sexp-grammar* sexp (and (? whitespace) (or magic list atom))
-  (:destructure (w s &bounds start end)
+  (:destructure (w s)
     (declare (ignore w))
-    (list s (cons start end))))
+    s))
 
 (defrule *sexp-grammar* magic "foobar"
   (:constant :magic)
@@ -95,3 +93,51 @@
 (change-rule *sexp-grammar* 'sexp *orig*)
 
 (parse *sexp-grammar* 'sexp "(foo bar 1 quux)" :junk-allowed t)
+
+;; "XML" is starting
+
+(defvar *xml-grammar* (make-grammar))
+
+(defrule *xml-grammar* whitespace (+ (or #\space #\tab #\newline))
+  (:constant nil))
+
+(defrule *xml-grammar* string-char (or (not-doublequote character) (and #\\ #\")))
+
+(defrule *xml-grammar* string (and #\" (* string-char) #\")
+  (:destructure (q1 string q2)
+    (declare (ignore q1 q2))
+    (text string)))
+
+(defrule *xml-grammar* starting-symbol (and "<" (+ (and (! ">") character)) ">")
+  (:lambda (list)
+    (intern (text list))))
+
+(defrule *xml-grammar* ending-symbol (and "<" (+ (and (! ">") character)) ">")
+  (:lambda (list)
+    (intern (text list))))
+
+(defrule *xml-grammar* sexp-element (and "<sexp>"
+					 (+ (and (! "</sexp>") character))
+					 "</sexp>")
+  (:destructure (ss sexpres es)
+    (declare (ignore es))
+    (cons (intern (string-trim "<>" ss))
+	  (parse *sexp-grammar* 'sexp (text "(" sexpres ")")))))
+
+(defrule *xml-grammar* term-element (and starting-symbol
+					 (+ (and (! ending-symbol) character))
+					 ending-symbol)
+  (:destructure (ss innertext es)
+    (declare (ignore es))
+    (list (intern (string-trim "<>" ss)) (text innertext))))
+
+(defrule *xml-grammar* element (and starting-symbol
+				    (+ (or sexp-element element term-element))
+				    ending-symbol)
+  (:destructure (ss innertext es)
+    (declare (ignore es))
+    (cons (intern (string-trim "<>" ss)) innertext)))
+
+(defrule *xml-grammar* xml (or sexp-element element term-element))
+
+(parse *xml-grammar* 'xml "<test><i>text</i><sexp>(a 2 3)</sexp></testy>")
