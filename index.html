@@ -72,7 +72,13 @@ thesis: &ldquo;Packrat Parsing: a Practical Linear Time Algorithm with Backtrack
 <h2>Table of Contents</h2>
 <ul>
 <li><a name="toc_TOC0" href="#TOC0">1 Parsing Expressions</a>
-<li><a name="toc_TOC11" href="#TOC11">2 Dictionary</a>
+<li><a name="toc_TOC12" href="#TOC12">2 Dictionary</a>
+<ul>
+<li><a href="#TOC13">2.1 Primary Interface</a>
+<li><a href="#TOC14">2.2 Utilities</a>
+<li><a href="#TOC15">2.3 Introspection and Intercession</a>
+<li><a href="#TOC16">2.4 Error Conditions</a>
+</li></ul>
 </li></ul>
 </div>
 
@@ -120,11 +126,12 @@ and an optional transformation rule.
    <p>Nonterminals are defined using <code>defrule</code>.
 
    <p><em>Note: Currently all rules share the same namespace, so you
-should not use symbols in the Common Lisp package or other shared
+should not use symbols in the COMMON-LISP package or other shared
 packages to name your rules unless you are certain there are no other
 Esrap using components in your Lisp image. In a future version of
 Esrap grammar objects will be introduced to allow multiple definitions
-of nonterminals.</em>
+of nonterminals. Symbols in the COMMON-LISP package are specifically
+reserved for use by Esrap.</em>
 
 <h3 class="heading"><a name="TOC3"></a>Sequence</h3>
 
@@ -146,7 +153,14 @@ produces.
    <p>Subexpressions are checked strictly in the specified order, and once
 a subexpression succeeds no further ones will be tried.
 
-<h3 class="heading"><a name="TOC5"></a>Greedy Repetition</h3>
+<h3 class="heading"><a name="TOC5"></a>Negation</h3>
+
+<pre class="lisp">     (not subexpression)
+</pre>
+   <p>A negation succeeds if the subexpression fails, and consumes one character
+of input. A negation produces the character it consumes.
+
+<h3 class="heading"><a name="TOC6"></a>Greedy Repetition</h3>
 
 <pre class="lisp">     (* subexpresssion)
 </pre>
@@ -156,7 +170,7 @@ applying subexpression repeatedly as long as it succeeds.
    <p>A greedy repetition produces the productions of the subexpression as a
 list.
 
-<h3 class="heading"><a name="TOC6"></a>Greedy Positive Repetition</h3>
+<h3 class="heading"><a name="TOC7"></a>Greedy Positive Repetition</h3>
 
 <pre class="lisp">     (+ subexpresssion)
 </pre>
@@ -165,7 +179,7 @@ and consumes all input consumed by applying subexpression repeatedly
 as long as it succeeds. A greedy positive repetition produces the
 productions of the subexpression as a list.
 
-<h3 class="heading"><a name="TOC7"></a>Optional</h3>
+<h3 class="heading"><a name="TOC8"></a>Optional</h3>
 
 <pre class="lisp">     (? subexpression)
 </pre>
@@ -173,7 +187,7 @@ productions of the subexpression as a list.
 consumes. An optional produces whatever the subexpression produces, or
 <code>nil</code> if the subexpression does not succeed.
 
-<h3 class="heading"><a name="TOC8"></a>Followed-By Predicate</h3>
+<h3 class="heading"><a name="TOC9"></a>Followed-By Predicate</h3>
 
 <pre class="lisp">     (&amp; subexpression)
 </pre>
@@ -181,7 +195,7 @@ consumes. An optional produces whatever the subexpression produces, or
 <em>consumes no input</em>. A followed-by predicate produces whatever
 the subexpression produces.
 
-<h3 class="heading"><a name="TOC9"></a>Not-Followed-By Predicate</h3>
+<h3 class="heading"><a name="TOC10"></a>Not-Followed-By Predicate</h3>
 
 <pre class="lisp">     (! subexpression)
 </pre>
@@ -189,7 +203,7 @@ the subexpression produces.
 succeed, and <em>consumes no input</em>. A not-followed-by predicate
 produces <code>nil</code>.
 
-<h3 class="heading"><a name="TOC10"></a>Semantic Predicates</h3>
+<h3 class="heading"><a name="TOC11"></a>Semantic Predicates</h3>
 
 <pre class="lisp">     (predicate-name subexpression)
 </pre>
@@ -201,7 +215,9 @@ semantic predicate produces whatever the subexpression produces.
    <p><em>Note: semantic predicates may change in the future to produce
 whatever the predicate function returns.</em>
 
-<h2 class="chapter"><a name="TOC11"></a>2 Dictionary</h2>
+<h2 class="chapter"><a name="TOC12"></a>2 Dictionary</h2>
+
+<h3 class="section"><a name="TOC13"></a>2.1 Primary Interface</h3>
 
 <p><a name="Macro-defrule"></a>
 
@@ -260,11 +276,39 @@ whatever the predicate function returns.</em>
 </ul>
         </p></blockquote></div>
 
-   <p><a name="Function-add_002drule"></a>
+   <p><a name="Function-parse"></a>
 
 <div class="defun">
-&mdash; Function: <b>add-rule</b><var> symbol rule<a name="index-add_002drule-3"></a></var><br>
-<blockquote><p><a name="index-add_002drule-4"></a>Associates <code>rule</code> with the nonterminal <code>symbol</code>. Signals an error if the
+&mdash; Function: <b>parse</b><var> expression text &amp;key start end junk-allowed<a name="index-parse-3"></a></var><br>
+<blockquote><p><a name="index-parse-4"></a>Parses <code>text</code> using <code>expression</code> from <code>start</code> to <code>end</code>. Incomplete parses
+are allowed only if <code>junk-allowed</code> is true. 
+</p></blockquote></div>
+
+   <p><a name="Function-describe_002dgrammar"></a>
+
+<div class="defun">
+&mdash; Function: <b>describe-grammar</b><var> symbol &amp;optional stream<a name="index-describe_002dgrammar-5"></a></var><br>
+<blockquote><p><a name="index-describe_002dgrammar-6"></a>Prints the grammar tree rooted at nonterminal <code>symbol</code> to <code>stream</code> for human
+inspection. 
+</p></blockquote></div>
+
+<h3 class="section"><a name="TOC14"></a>2.2 Utilities</h3>
+
+<p><a name="Function-text"></a>
+
+<div class="defun">
+&mdash; Function: <b>text</b><var> &amp;rest arguments<a name="index-text-7"></a></var><br>
+<blockquote><p><a name="index-text-8"></a>Arguments must be strings, or lists whose leaves are strings. 
+Catenates all the strings in arguments into a single string. 
+</p></blockquote></div>
+
+<h3 class="section"><a name="TOC15"></a>2.3 Introspection and Intercession</h3>
+
+<p><a name="Function-add_002drule"></a>
+
+<div class="defun">
+&mdash; Function: <b>add-rule</b><var> symbol rule<a name="index-add_002drule-9"></a></var><br>
+<blockquote><p><a name="index-add_002drule-10"></a>Associates <code>rule</code> with the nonterminal <code>symbol</code>. Signals an error if the
 rule is already associated with a nonterminal. If the symbol is already
 associated with a rule, the old rule is removed first. 
 </p></blockquote></div>
@@ -272,40 +316,24 @@ associated with a rule, the old rule is removed first.
    <p><a name="Function-change_002drule"></a>
 
 <div class="defun">
-&mdash; Function: <b>change-rule</b><var> symbol expression<a name="index-change_002drule-5"></a></var><br>
-<blockquote><p><a name="index-change_002drule-6"></a>Modifies the nonterminal <code>symbol</code> to use <code>expression</code> instead. Temporarily
+&mdash; Function: <b>change-rule</b><var> symbol expression<a name="index-change_002drule-11"></a></var><br>
+<blockquote><p><a name="index-change_002drule-12"></a>Modifies the nonterminal <code>symbol</code> to use <code>expression</code> instead. Temporarily
 removes the rule while it is being modified. 
-</p></blockquote></div>
-
-   <p><a name="Function-describe_002dgrammar"></a>
-
-<div class="defun">
-&mdash; Function: <b>describe-grammar</b><var> symbol &amp;optional stream<a name="index-describe_002dgrammar-7"></a></var><br>
-<blockquote><p><a name="index-describe_002dgrammar-8"></a>Prints the grammar tree rooted at nonterminal <code>symbol</code> to <code>stream</code> for human
-inspection. 
 </p></blockquote></div>
 
    <p><a name="Function-find_002drule"></a>
 
 <div class="defun">
-&mdash; Function: <b>find-rule</b><var> symbol<a name="index-find_002drule-9"></a></var><br>
-<blockquote><p><a name="index-find_002drule-10"></a>Returns rule designated by <code>symbol</code>, if any. Symbol must be a nonterminal
+&mdash; Function: <b>find-rule</b><var> symbol<a name="index-find_002drule-13"></a></var><br>
+<blockquote><p><a name="index-find_002drule-14"></a>Returns rule designated by <code>symbol</code>, if any. Symbol must be a nonterminal
 symbol. 
-</p></blockquote></div>
-
-   <p><a name="Function-parse"></a>
-
-<div class="defun">
-&mdash; Function: <b>parse</b><var> expression text &amp;key start end junk-allowed<a name="index-parse-11"></a></var><br>
-<blockquote><p><a name="index-parse-12"></a>Parses <code>text</code> using <code>expression</code> from <code>start</code> to <code>end</code>. Incomplete parses
-are allowed only if <code>junk-allowed</code> is true. 
 </p></blockquote></div>
 
    <p><a name="Function-remove_002drule"></a>
 
 <div class="defun">
-&mdash; Function: <b>remove-rule</b><var> symbol &amp;key force<a name="index-remove_002drule-13"></a></var><br>
-<blockquote><p><a name="index-remove_002drule-14"></a>Makes the nonterminal <code>symbol</code> undefined. If the nonterminal is defined an
+&mdash; Function: <b>remove-rule</b><var> symbol &amp;key force<a name="index-remove_002drule-15"></a></var><br>
+<blockquote><p><a name="index-remove_002drule-16"></a>Makes the nonterminal <code>symbol</code> undefined. If the nonterminal is defined an
 already referred to by other rules, an error is signalled unless <code>:force</code> is
 true. 
 </p></blockquote></div>
@@ -313,8 +341,8 @@ true.
    <p><a name="Function-rule_002ddependencies"></a>
 
 <div class="defun">
-&mdash; Function: <b>rule-dependencies</b><var> rule<a name="index-rule_002ddependencies-15"></a></var><br>
-<blockquote><p><a name="index-rule_002ddependencies-16"></a>Returns the dependencies of the <code>rule:</code> primary value is a list of defined
+&mdash; Function: <b>rule-dependencies</b><var> rule<a name="index-rule_002ddependencies-17"></a></var><br>
+<blockquote><p><a name="index-rule_002ddependencies-18"></a>Returns the dependencies of the <code>rule:</code> primary value is a list of defined
 nonterminal symbols, and secondary value is a list of undefined nonterminal
 symbols. 
 </p></blockquote></div>
@@ -322,32 +350,24 @@ symbols.
    <p><a name="Function-rule_002dexpression"></a>
 
 <div class="defun">
-&mdash; Function: <b>rule-expression</b><var> rule<a name="index-rule_002dexpression-17"></a></var><br>
-<blockquote><p><a name="index-rule_002dexpression-18"></a>Return the parsing expression associated with the <code>rule</code>. 
+&mdash; Function: <b>rule-expression</b><var> rule<a name="index-rule_002dexpression-19"></a></var><br>
+<blockquote><p><a name="index-rule_002dexpression-20"></a>Return the parsing expression associated with the <code>rule</code>. 
 </p></blockquote></div>
 
    <p><a name="Function-_0028setf-rule_002dexpression_0029"></a>
 
 <div class="defun">
-&mdash; Function: <b>(setf rule-expression)</b><var> expression rule<a name="index-g_t_0028setf-rule_002dexpression_0029-19"></a></var><br>
-<blockquote><p><a name="index-g_t_0028setf-rule_002dexpression_0029-20"></a>Modify <code>rule</code> to use <code>expression</code> as the parsing expression. The rule must be
+&mdash; Function: <b>(setf rule-expression)</b><var> expression rule<a name="index-g_t_0028setf-rule_002dexpression_0029-21"></a></var><br>
+<blockquote><p><a name="index-g_t_0028setf-rule_002dexpression_0029-22"></a>Modify <code>rule</code> to use <code>expression</code> as the parsing expression. The rule must be
 detached beforehand. 
 </p></blockquote></div>
 
    <p><a name="Function-rule_002dsymbol"></a>
 
 <div class="defun">
-&mdash; Function: <b>rule-symbol</b><var> rule<a name="index-rule_002dsymbol-21"></a></var><br>
-<blockquote><p><a name="index-rule_002dsymbol-22"></a>Returns the nonterminal associated with the <code>rule</code>, or <code>nil</code> of the rule
+&mdash; Function: <b>rule-symbol</b><var> rule<a name="index-rule_002dsymbol-23"></a></var><br>
+<blockquote><p><a name="index-rule_002dsymbol-24"></a>Returns the nonterminal associated with the <code>rule</code>, or <code>nil</code> of the rule
 is not attached to any nonterminal. 
-</p></blockquote></div>
-
-   <p><a name="Function-text"></a>
-
-<div class="defun">
-&mdash; Function: <b>text</b><var> &amp;rest arguments<a name="index-text-23"></a></var><br>
-<blockquote><p><a name="index-text-24"></a>Arguments must be strings, or lists whose leaves are strings. 
-Catenates all the strings in arguments into a single string. 
 </p></blockquote></div>
 
    <p><a name="Function-trace_002drule"></a>
@@ -366,6 +386,31 @@ break is entered when the rule is invoked.
 <blockquote><p><a name="index-untrace_002drule-28"></a>Turn off tracing of nonterminal <code>symbol</code>. If <code>recursive</code> is true, untraces the
 whole grammar rooted at <code>symbol</code>. <code>break</code> is ignored, and is provided only for
 symmetry with <code>trace-rule</code>. 
+</p></blockquote></div>
+
+<h3 class="section"><a name="TOC16"></a>2.4 Error Conditions</h3>
+
+<p><a name="Condition-esrap_002derror"></a>
+
+<div class="defun">
+&mdash; Condition: <b>esrap-error</b><var><a name="index-esrap_002derror-29"></a></var><br>
+<blockquote><p><a name="index-esrap_002derror-30"></a>Class precedence list: <code>esrap-error, parse-error, error, serious-condition, condition, t</code>
+
+        <p>Signaled when an Esrap parse fails. Use <code>esrap-error-text</code> to obtain the
+string that was being parsed, and <code>esrap-error-position</code> the position at which
+the error occurred. 
+</p></blockquote></div>
+
+   <p><a name="Condition-left_002drecursion"></a>
+
+<div class="defun">
+&mdash; Condition: <b>left-recursion</b><var><a name="index-left_002drecursion-31"></a></var><br>
+<blockquote><p><a name="index-left_002drecursion-32"></a>Class precedence list: <code>left-recursion, esrap-error, parse-error, error, serious-condition, condition, t</code>
+
+        <p>Signaled when left recursion is detected during Esrap parsing. 
+<code>left-recursion-nonterminal</code> names the symbol for which left recursion was
+detected, and <code>left-recursion-path</code> lists nonterminals of which the left
+recursion cycle consists. 
 </p></blockquote></div>
 
 </body></html>
