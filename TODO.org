@@ -1,8 +1,4 @@
 Esrap TODO
-* NOT
-  I'm writing a lot of semantic predicates of the form NOT-SOME-KIND-OF-CHARACTER.
-  Having (NOT #\NEWLINE) match all but newlines would be nice.
-  Having (NOT (DIGIT-CHAR-P CHARACTER)) would be even nicer.
 * Optimizations
 *** Error vs Success results
     We're interested in the production/failure, and the position.

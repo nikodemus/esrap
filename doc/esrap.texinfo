@@ -101,11 +101,12 @@ and an optional transformation rule.
 Nonterminals are defined using @code{defrule}.
 
 @emph{Note: Currently all rules share the same namespace, so you
-should not use symbols in the Common Lisp package or other shared
+should not use symbols in the COMMON-LISP package or other shared
 packages to name your rules unless you are certain there are no other
 Esrap using components in your Lisp image. In a future version of
 Esrap grammar objects will be introduced to allow multiple definitions
-of nonterminals.}
+of nonterminals. Symbols in the COMMON-LISP package are specifically
+reserved for use by Esrap.}
 
 @heading Sequence
 @lisp
@@ -128,6 +129,14 @@ produces.
 
 Subexpressions are checked strictly in the specified order, and once
 a subexpression succeeds no further ones will be tried.
+
+@heading Negation
+@lisp
+(not subexpression)
+@end lisp
+
+A negation succeeds if the subexpression fails, and consumes one character
+of input. A negation produces the character it consumes.
 
 @heading Greedy Repetition
 @lisp

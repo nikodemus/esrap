@@ -967,6 +967,8 @@ inspection."
         (eval-sequence expression text position end))
        (or
         (eval-ordered-choise expression text position end))
+       (not
+        (eval-negation expression text position end))
        (*
         (eval-greedy-repetition expression text position end))
        (+
@@ -1002,6 +1004,8 @@ inspection."
         (compile-sequence expression))
        (or
         (compile-ordered-choise expression))
+       (not
+        (compile-negation expression))
        (*
         (compile-greedy-repetition expression))
        (+
@@ -1240,6 +1244,31 @@ inspection."
                                                (failed-parse-position result)))))
                            (setf last-error result))
                          (return result))))))))))))
+
+;;; Negations
+
+(defun exec-negation (fun expr text position end)
+  (if (and (< position end)
+           (error-result-p (funcall fun text position end)))
+      (make-result
+       :position (1+ position)
+       :production (char text position))
+      (make-failed-parse
+       :expression expr
+       :position position)))
+
+(defun eval-negation (expression text position end)
+  (with-expression (expression (not subexpr))
+    (flet ((eval-sub (text position end)
+             (eval-expression subexpr text position end)))
+      (declare (dynamic-extent #'eval-sub))
+      (exec-negation #'eval-sub expression text position end))))
+
+(defun compile-negation (expression)
+  (with-expression (expression (not subexpr))
+    (let ((sub (compile-expression subexpr)))
+      (named-lambda compiled-negation (text position end)
+        (exec-negation sub expression text position end)))))
 
 ;;; Greedy repetitions
 
