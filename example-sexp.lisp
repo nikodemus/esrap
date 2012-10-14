@@ -18,43 +18,43 @@
 
 ;;; Utility rules.
 
-(defvar *sexp-grammar* (make-grammar))
+(make-grammar sexp)
 
-(defrule *sexp-grammar* whitespace (+ (or #\space #\tab #\newline))
+(sexp-defrule whitespace (+ (or #\space #\tab #\newline))
   (:constant nil))
 
-(defrule *sexp-grammar* alphanumeric (alphanumericp character))
+(sexp-defrule alphanumeric (alphanumericp character))
 
-(defrule *sexp-grammar* string-char (or (not-doublequote character) (and #\\ #\")))
+(sexp-defrule string-char (or (not-doublequote character) (and #\\ #\")))
 
 ;;; Here we go: an S-expression is either a list or an atom, with possibly leading whitespace.
 
-(defrule *sexp-grammar* sexp (and (? whitespace) (or magic list atom))
+(sexp-defrule sexp (and (? whitespace) (or magic list atom))
   (:destructure (w s &bounds start end)
     (declare (ignore w))
     (list s (cons start end))))
 
-(defrule *sexp-grammar* magic "foobar"
+(sexp-defrule magic "foobar"
   (:constant :magic)
   (:when (eq * :use-magic)))
 
-(defrule *sexp-grammar* list (and #\( sexp (* sexp) (? whitespace) #\))
+(sexp-defrule list (and #\( sexp (* sexp) (? whitespace) #\))
   (:destructure (p1 car cdr w p2)
     (declare (ignore p1 p2 w))
     (cons car cdr)))
 
-(defrule *sexp-grammar* atom (or string integer symbol))
+(sexp-defrule atom (or string integer symbol))
 
-(defrule *sexp-grammar* string (and #\" (* string-char) #\")
+(sexp-defrule string (and #\" (* string-char) #\")
   (:destructure (q1 string q2)
     (declare (ignore q1 q2))
     (text string)))
 
-(defrule *sexp-grammar* integer (+ (or "0" "1" "2" "3" "4" "5" "6" "7" "8" "9"))
+(sexp-defrule integer (+ (or "0" "1" "2" "3" "4" "5" "6" "7" "8" "9"))
   (:lambda (list)
     (parse-integer (text list) :radix 10)))
 
-(defrule *sexp-grammar* symbol (not-integer (+ alphanumeric))
+(sexp-defrule symbol (not-integer (+ alphanumeric))
   ;; NOT-INTEGER is not strictly needed because ATOM considers INTEGER before
   ;; a STRING, we know can accept all sequences of alphanumerics -- we already
   ;; know it isn't an integer.
@@ -63,35 +63,35 @@
 
 ;;;; Try these
 
-(parse *sexp-grammar* 'sexp "FOO123")
+(sexp-parse 'sexp "FOO123")
 
-(parse *sexp-grammar* 'sexp "123")
+(sexp-parse 'sexp "123")
 
-(parse *sexp-grammar* 'sexp "\"foo\"")
+(sexp-parse 'sexp "\"foo\"")
 
-(parse *sexp-grammar* 'sexp "  (  1 2  3 (FOO\"foo\"123 )   )")
+(sexp-parse 'sexp "  (  1 2  3 (FOO\"foo\"123 )   )")
 
-(parse *sexp-grammar* 'sexp "foobar")
+(sexp-parse 'sexp "foobar")
 
 (let ((* :use-magic))
-  (parse *sexp-grammar* 'sexp "foobar"))
+  (sexp-parse 'sexp "foobar"))
 
-(describe-grammar *sexp-grammar* 'sexp)
+(sexp-describe-grammar 'sexp)
 
-(trace-rule *sexp-grammar* 'sexp :recursive t)
+(sexp-trace-rule 'sexp :recursive t)
 
-(parse *sexp-grammar* 'sexp "(foo bar 1 quux)")
+(sexp-parse 'sexp "(foo bar 1 quux)")
 
-(untrace-rule *sexp-grammar* 'sexp :recursive t)
+(sexp-untrace-rule 'sexp :recursive t)
 
-(defparameter *orig* (rule-expression (find-rule *sexp-grammar* 'sexp)))
+(defparameter *orig* (rule-expression (sexp-find-rule 'sexp)))
 
-(change-rule *sexp-grammar* 'sexp '(and (? whitespace) (or list symbol)))
+(sexp-change-rule 'sexp '(and (? whitespace) (or list symbol)))
 
-(parse *sexp-grammar* 'sexp "(foo bar quux)")
+(sexp-parse 'sexp "(foo bar quux)")
 
-(parse *sexp-grammar* 'sexp "(foo bar 1 quux)" :junk-allowed t)
+(sexp-parse 'sexp "(foo bar 1 quux)" :junk-allowed t)
 
-(change-rule *sexp-grammar* 'sexp *orig*)
+(sexp-change-rule 'sexp *orig*)
 
-(parse *sexp-grammar* 'sexp "(foo bar 1 quux)" :junk-allowed t)
+(sexp-parse 'sexp "(foo bar 1 quux)" :junk-allowed t)

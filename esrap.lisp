@@ -241,23 +241,52 @@ and expressions of the form \(~ <literal>) denote case-insensitive terminals."
 ;;; RULE object can be attached to only one non-terminal at a time, which is
 ;;; accessible via RULE-SYMBOL.
 
-;; Alternatives
+(defclass grammar ()
+    ((rules :initform (make-hash-table) :accessor grammar-rules)))
 
-;; (defun make-grammar () (make-hash-table))
-;; needs using of `grammar' instead of `(grammar-rules grammar)'
+(defun make-name (suffix &optional name)
+  (intern (string-upcase (concatenate 'string
+				      (when name (princ-to-string name))
+				      (when name "-") suffix))))
 
-;; or
+(defmacro make-grammar (name)
+  `(%make-grammar ,name))
 
-;; (defclass grammar ()
-;;     (rules :initform (make-hash-table) :accessor grammar-rules))
+(defmacro %make-grammar (&optional name)
+  (let ((grammar (gensym))
+	(name-defrule (make-name "defrule" name))
+	(name-parse (make-name "parse" name))
+	(name-describe-grammar (make-name "describe-grammar" name))
+	(name-trace-rule (make-name "trace-rule" name))
+	(name-untrace-rule (make-name "untrace-rule" name))
+	(name-find-rule (make-name "find-rule" name))
+	(name-change-rule (make-name "change-rule" name)))
+    `(let ((,grammar (make-instance 'grammar)))
+       (defmacro ,name-defrule (symbol expression &rest options)
+	 `(%defrule ,,grammar ,symbol ,expression ,@options))
+       (defun ,name-parse (expression text &key (start 0) end junk-allowed)
+	 (%parse ,grammar expression text
+		 :start start
+		 :end end
+		 :junk-allowed junk-allowed))
+       (defun ,name-describe-grammar (symbol
+				      &optional (stream *standard-output*))
+	 (%describe-grammar ,grammar symbol stream))
+       (defun ,name-trace-rule (symbol &key recursive break)
+	 (%trace-rule ,grammar symbol :recursive recursive :break break))
+       (defun ,name-untrace-rule (symbol &key recursive break)
+	 (%untrace-rule ,grammar symbol :recursive recursive :break break))
+       (defun ,name-find-rule (symbol)
+	 (%find-rule ,grammar symbol))
+       (defun ,name-change-rule (symbol expression)
+	 (%change-rule ,grammar symbol expression)))))
 
-;; (defun make-grammar ()
-;;   (make-instance 'grammar))
+   ;; #:add-rule
+   ;; #:remove-rule
+   ;; #:rule-dependencies
+   ;; #:rule-expression
+   ;; #:rule-symbol
 
-;; And the most simple and perspective variant
-
-(defstruct (grammar (:conc-name grammar-))
-  (rules (make-hash-table)))
 
 (defun clear-rules (grammar)
   (clrhash (grammar-rules grammar))
@@ -362,7 +391,7 @@ is not attached to any nonterminal."
         (defined nil)
         (undefined nil))
     (dolist (sym symbols)
-      (if (find-rule grammar sym)
+      (if (%find-rule grammar sym)
           (push sym defined)
           (push sym undefined)))
     (values defined undefined)))
@@ -488,7 +517,7 @@ symbols."
 
 ;;; MAIN INTERFACE
 
-(defun parse (grammar expression text &key (start 0) end junk-allowed)
+(defun %parse (grammar expression text &key (start 0) end junk-allowed)
   "Parses TEXT using EXPRESSION from START to END. Incomplete parses
 are allowed only if JUNK-ALLOWED is true."
   ;; There is no backtracking in the toplevel expression -- so there's
@@ -502,8 +531,8 @@ are allowed only if JUNK-ALLOWED is true."
      end
      junk-allowed)))
 
-(define-compiler-macro parse (&whole form grammar expression &rest arguments
-                              &environment env)
+(define-compiler-macro %parse (&whole form grammar expression &rest arguments
+				      &environment env)
   (if (constantp expression env)
       (with-gensyms (expr-fun)
         `(let ((,expr-fun (load-time-value (compile-expression ,grammar
@@ -547,7 +576,7 @@ are allowed only if JUNK-ALLOWED is true."
                       position
                       (simple-esrap-error text position "Incomplete parse.")))))))
 
-(defmacro defrule (&whole form grammar symbol expression &body options)
+(defmacro %defrule (&whole form grammar symbol expression &body options)
   "Define SYMBOL as a nonterminal, using EXPRESSION as associated the parsing expression.
 
 Following OPTIONS can be specified:
@@ -684,10 +713,10 @@ associated with a rule, the old rule is removed first."
     (setf (cell-trace-info cell) nil)
     (setf (slot-value rule '%symbol) symbol)
     (when trace-info
-      (trace-rule grammar symbol :break (second trace-info)))
+      (%trace-rule grammar symbol :break (second trace-info)))
     symbol))
 
-(defun find-rule (grammar symbol)
+(defun %find-rule (grammar symbol)
   "Returns rule designated by SYMBOL, if any. Symbol must be a nonterminal
 symbol."
   (check-type symbol nonterminal)
@@ -728,7 +757,7 @@ true."
 
 (defvar *trace-stack* nil)
 
-(defun trace-rule (grammar symbol &key recursive break)
+(defun %trace-rule (grammar symbol &key recursive break)
   "Turn on tracing of nonterminal SYMBOL. If RECURSIVE is true, turn
 on tracing for the whole grammar rooted at SYMBOL. If BREAK is true,
 break is entered when the rule is invoked."
@@ -738,7 +767,7 @@ break is entered when the rule is invoked."
         (error "Undefined rule: ~S" symbol))
       (when (cell-trace-info cell)
         (let ((*trace-stack* nil))
-          (untrace-rule grammar symbol)))
+          (%untrace-rule grammar symbol)))
       (let ((fun (cell-function cell))
             (rule (cell-rule cell))
             (info (cell-%info cell)))
@@ -767,10 +796,10 @@ break is entered when the rule is invoked."
       (when recursive
         (let ((*trace-stack* (cons symbol *trace-stack*)))
           (dolist (dep (%rule-direct-dependencies (cell-rule cell)))
-            (trace-rule grammar dep :recursive t :break break))))
+            (%trace-rule grammar dep :recursive t :break break))))
       t)))
 
-(defun untrace-rule (grammar symbol &key recursive break)
+(defun %untrace-rule (grammar symbol &key recursive break)
   "Turn off tracing of nonterminal SYMBOL. If RECURSIVE is true, untraces the
 whole grammar rooted at SYMBOL. BREAK is ignored, and is provided only for
 symmetry with TRACE-RULE."
@@ -786,7 +815,7 @@ symmetry with TRACE-RULE."
         (when recursive
           (let ((*trace-stack* (cons symbol *trace-stack*)))
             (dolist (dep (%rule-direct-dependencies (cell-rule cell)))
-              (untrace-rule grammar dep :recursive t))))))
+              (%untrace-rule grammar dep :recursive t))))))
     nil))
 
 (defun rule-expression (rule)
@@ -803,7 +832,7 @@ detached beforehand."
              name))
     (setf (slot-value rule '%expression) expression)))
 
-(defun change-rule (grammar symbol expression)
+(defun %change-rule (grammar symbol expression)
   "Modifies the nonterminal SYMBOL to use EXPRESSION instead. Temporarily
 removes the rule while it is being modified."
   (let ((rule (remove-rule grammar symbol :force t)))
@@ -815,11 +844,11 @@ removes the rule while it is being modified."
 (defun symbol-length (x)
   (length (symbol-name x)))
 
-(defun describe-grammar (grammar symbol &optional (stream *standard-output*))
+(defun %describe-grammar (grammar symbol &optional (stream *standard-output*))
   "Prints the grammar tree rooted at nonterminal SYMBOL to STREAM for human
 inspection."
   (check-type symbol nonterminal)
-  (let ((rule (find-rule grammar symbol)))
+  (let ((rule (%find-rule grammar symbol)))
     (cond ((not rule)
            (format stream "Symbol ~S is not a defined nonterminal." symbol))
           (t
@@ -836,7 +865,7 @@ inspection."
                          (rule-guard-expression rule)))
                (when defined
                  (dolist (s defined)
-                   (let ((dep (find-rule grammar s)))
+                   (let ((dep (%find-rule grammar s)))
                      (format stream "~3T~S~VT<- ~S~@[ : ~S~]~%"
                             s length (rule-expression dep)
                             (when (rule-condition rule)
@@ -934,7 +963,7 @@ inspection."
     (nonterminal
      (if (member expression seen :test #'eq)
          seen
-         (let ((rule (find-rule grammar expression))
+         (let ((rule (%find-rule grammar expression))
                (seen (cons expression seen)))
            (if rule
                (%expression-dependencies grammar (rule-expression rule) seen)
@@ -1109,7 +1138,7 @@ inspection."
 
 (defun eval-nonterminal (grammar symbol text position end)
   (if *eval-nonterminals*
-      (eval-expression grammar (rule-expression (find-rule grammar symbol)) text position end)
+      (eval-expression grammar (rule-expression (%find-rule grammar symbol)) text position end)
       (funcall (cell-function (ensure-rule-cell grammar symbol)) text position end)))
 
 (defun compile-nonterminal (grammar symbol)
@@ -1436,3 +1465,5 @@ inspection."
       t)))
 
 (hint-slime-indentation)
+
+(%make-grammar)
