@@ -244,10 +244,11 @@ and expressions of the form \(~ <literal>) denote case-insensitive terminals."
 (defclass grammar ()
     ((rules :initform (make-hash-table) :accessor grammar-rules)))
 
-(defun make-name (suffix &optional name)
-  (intern (string-upcase (concatenate 'string
-				      (when name (princ-to-string name))
-				      (when name "-") suffix))))
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defun make-name (suffix &optional name)
+    (intern (string-upcase (concatenate 'string
+					(when name (princ-to-string name))
+					(when name "-") suffix)))))
 
 (defmacro make-grammar (name)
   `(%make-grammar ,name))
@@ -260,7 +261,10 @@ and expressions of the form \(~ <literal>) denote case-insensitive terminals."
 	(name-trace-rule (make-name "trace-rule" name))
 	(name-untrace-rule (make-name "untrace-rule" name))
 	(name-find-rule (make-name "find-rule" name))
-	(name-change-rule (make-name "change-rule" name)))
+	(name-change-rule (make-name "change-rule" name))
+	(name-add-rule (make-name "add-rule" name))
+	(name-remove-rule (make-name "remove-rule" name))
+	(name-rule-dependencies (make-name "rule-dependencies" name)))
     `(let ((,grammar (make-instance 'grammar)))
        (defmacro ,name-defrule (symbol expression &rest options)
 	 `(%defrule ,,grammar ,symbol ,expression ,@options))
@@ -279,14 +283,13 @@ and expressions of the form \(~ <literal>) denote case-insensitive terminals."
        (defun ,name-find-rule (symbol)
 	 (%find-rule ,grammar symbol))
        (defun ,name-change-rule (symbol expression)
-	 (%change-rule ,grammar symbol expression)))))
-
-   ;; #:add-rule
-   ;; #:remove-rule
-   ;; #:rule-dependencies
-   ;; #:rule-expression
-   ;; #:rule-symbol
-
+	 (%change-rule ,grammar symbol expression))
+       (defun ,name-add-rule (symbol rule)
+	 (%add-rule ,grammar symbol rule))
+       (defun ,name-remove-rule (symbol &key (force t))
+	 (%remove-rule ,grammar symbol :force force))
+       (defun ,name-rule-dependencies (rule)
+	 (%rule-dependencies ,grammar rule)))))
 
 (defun clear-rules (grammar)
   (clrhash (grammar-rules grammar))
@@ -396,7 +399,7 @@ is not attached to any nonterminal."
           (push sym undefined)))
     (values defined undefined)))
 
-(defun rule-dependencies (grammar rule)
+(defun %rule-dependencies (grammar rule)
   "Returns the dependencies of the RULE: primary value is a list of defined
 nonterminal symbols, and secondary value is a list of undefined nonterminal
 symbols."
@@ -686,14 +689,14 @@ Following OPTIONS can be specified:
                             (destructuring-bind ,lambda-list ,production
                               ,@forms)))))))))))
     `(eval-when (:load-toplevel :execute)
-       (add-rule ,grammar ',symbol
-		 (make-instance 'rule
-				:expression ',expression
-				:guard-expression ',guard
-				:transform ,(or transform '#'identity/bounds)
-				:condition ,condition)))))
+       (%add-rule ,grammar ',symbol
+		  (make-instance 'rule
+				 :expression ',expression
+				 :guard-expression ',guard
+				 :transform ,(or transform '#'identity/bounds)
+				 :condition ,condition)))))
 
-(defun add-rule (grammar symbol rule)
+(defun %add-rule (grammar symbol rule)
   "Associates RULE with the nonterminal SYMBOL. Signals an error if the
 rule is already associated with a nonterminal. If the symbol is already
 associated with a rule, the old rule is removed first."
@@ -724,7 +727,7 @@ symbol."
     (when cell
       (cell-rule cell))))
 
-(defun remove-rule (grammar symbol &key force)
+(defun %remove-rule (grammar symbol &key force)
   "Makes the nonterminal SYMBOL undefined. If the nonterminal is defined an
 already referred to by other rules, an error is signalled unless :FORCE is
 true."
@@ -835,11 +838,11 @@ detached beforehand."
 (defun %change-rule (grammar symbol expression)
   "Modifies the nonterminal SYMBOL to use EXPRESSION instead. Temporarily
 removes the rule while it is being modified."
-  (let ((rule (remove-rule grammar symbol :force t)))
+  (let ((rule (%remove-rule grammar symbol :force t)))
     (unless rule
       (error "~S is not a defined rule." symbol))
     (setf (rule-expression rule) expression)
-    (add-rule grammar symbol rule)))
+    (%add-rule grammar symbol rule)))
 
 (defun symbol-length (x)
   (length (symbol-name x)))
@@ -853,7 +856,7 @@ inspection."
            (format stream "Symbol ~S is not a defined nonterminal." symbol))
           (t
            (format stream "~&Grammar ~S:~%" symbol)
-           (multiple-value-bind (defined undefined) (rule-dependencies grammar rule)
+           (multiple-value-bind (defined undefined) (%rule-dependencies grammar rule)
              (let ((length
                     (+ 4 (max (reduce #'max (mapcar #'symbol-length defined)
                                       :initial-value 0)
