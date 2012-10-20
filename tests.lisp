@@ -254,6 +254,17 @@
                             (0 . (0 . 7)))
                            . "baz"))))
 
+(defrule character-range (character-ranges (#\a #\b) #\-))
+
+(test character-range-test
+  (is (equal '(#\a #\b) (parse '(* (character-ranges (#\a #\z) #\-)) "ab" :junk-allowed t)))
+  (is (equal '(#\a #\b) (parse '(* (character-ranges (#\a #\z) #\-)) "ab1" :junk-allowed t)))
+  (is (equal '(#\a #\b #\-) (parse '(* (character-ranges (#\a #\z) #\-)) "ab-" :junk-allowed t)))
+  (is (or
+       (equal '() (parse '(* (character-ranges (#\a #\z) #\-)) "AB-" :junk-allowed t))
+       (equal '() (parse '(* (character-ranges (#\a #\z) #\-)) "ZY-" :junk-allowed t))))
+  (is (equal '(#\a #\b #\-) (parse '(* character-range) "ab-cd" :junk-allowed t))))
+
 (defun run-tests ()
   (let ((results (run 'esrap)))
     (eos:explain! results)

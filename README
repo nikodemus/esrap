@@ -46,6 +46,7 @@ Syntax overview:
  character                 -- any single character
  (string length)           -- any string of length
  (not expression)          -- complement of expression
+ (character-ranges ranges) -- character ranges
  (and &rest sequence)
  (or &rest ordered-choices)
  (* greedy-repetition)
