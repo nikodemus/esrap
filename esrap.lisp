@@ -37,6 +37,7 @@
    #:&bounds
 
    #:! #:? #:+ #:* #:& #:~
+   #:character-ranges
 
    #:add-rule
    #:change-rule
@@ -878,6 +879,16 @@ inspection."
 (defun invalid-expression-error (expression)
   (error "Invalid expression: ~S" expression))
 
+(defun validate-character-ranges-range (range)
+  (or
+    (characterp range)
+    (and
+      (consp range)
+      (consp (cdr range))
+      (characterp (car range))
+      (characterp (cadr range))
+      (null (cddr range)))))
+
 (defun validate-expression (expression)
   (or (typecase expression
         ((eql character)
@@ -895,6 +906,8 @@ inspection."
            (string
             (and (cdr expression) (not (cddr expression))
                  (typep (second expression) 'array-length)))
+	   (character-ranges
+	     (and (every #'validate-character-ranges-range (cdr expression)) t))
            (t
             (and (symbolp (car expression))
                  (cdr expression) (not (cddr expression))
@@ -919,7 +932,7 @@ inspection."
                seen))))
     (cons
      (case (car expression)
-       (string
+       ((string character-ranges)
         seen)
        ((and or)
         (dolist (subexpr (cdr expression) seen)
@@ -979,6 +992,8 @@ inspection."
         (eval-followed-by expression text position end))
        (!
         (eval-not-followed-by expression text position end))
+       (character-ranges
+         (eval-character-ranges expression text position end))
        (t
         (if (symbolp (car expression))
             (eval-semantic-predicate expression text position end)
@@ -1016,6 +1031,8 @@ inspection."
         (compile-followed-by expression))
        (!
         (compile-not-followed-by expression))
+       (character-ranges
+         (compile-character-ranges expression))
        (t
         (if (symbolp (car expression))
             (compile-semantic-predicate expression)
@@ -1423,6 +1440,57 @@ inspection."
                     (make-failed-parse
                      :position position
                      :expression expression)))))))))
+
+(defun eval-character-ranges-ranges (char ranges)
+  (loop for range in ranges
+        do (if
+             (consp range)
+             (when
+               (char<= (first range) char (second range))
+               (return-from eval-character-ranges-ranges t))
+             (when (char= range char)
+               (return-from eval-character-ranges-ranges t))))
+  nil)
+
+(defmacro character-ranges-ranges-code (char ranges)
+  (if
+    (constantp ranges)
+    `(or
+       ,@(loop for range in (eval ranges)
+               collect
+               (if
+                 (consp range)
+                 `(char<= ,(first range) ,char ,(second range))
+                 `(char= ,range ,char)
+                 ))
+       )
+    `(eval-character-ranges-ranges ,char ,ranges)))
+
+(defun eval-character-ranges (expression text position end)
+  (with-expression (expression (character-ranges ranges))
+    (let ((result (eval-character text position end)))
+      (cond
+        ((error-result-p result) (make-failed-parse :expression expression
+                                                    :position position))
+        ((eval-character-ranges-ranges (result-production result) ranges)
+         result)
+        (t (make-failed-parse :expression expression
+                              :position position))))))
+
+(defun compile-character-ranges (expression)
+  (named-lambda compiled-character-ranges (text position end)
+    (let
+      ((char (and
+               (< position end)
+               (char text position))))
+      (if
+        (and char (character-ranges-ranges-code char (cdr expression)))
+        (make-result
+          :position (1+ position)
+          :production char)
+        (make-failed-parse
+          :expression expression
+          :position position)))))
 
 (defvar *indentation-hint-table* nil)
 

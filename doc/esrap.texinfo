@@ -86,6 +86,11 @@ Expressions of the form @code{(string length)} can be used
 to specify sequences of arbitrary characters: @code{(string 2)} succeeds
 and consumes input as if @code{(and character character)}.
 @end itemize
+@item
+Expressions of the form @code{(character-ranges range ...)}
+A character-range pseudoterminal matches if there is a character left
+and it is inside one of the given ranges. Range can be specified like
+(#\a #\z) or be a simple character.
 
 Both normal terminals and pseudoterminals produce the consumed input
 as a string.
