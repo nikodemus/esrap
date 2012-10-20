@@ -45,6 +45,7 @@ Syntax overview:
  (~ <literal>)             -- case-insensitive terminal
  character                 -- any single character
  (string length)           -- any string of length
+ (character-ranges ranges) -- character ranges
  (and &rest sequence)
  (or &rest ordered-choises)
  (* greedy-repetition)

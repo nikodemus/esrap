@@ -191,6 +191,17 @@
     (is (equal "Foo" t3c))
     (is (equal "Foo" t3e))))
 
+(defrule character-range (character-ranges (#\a #\b) #\-))
+
+(defun character-range-test ()
+  (is (equal '(#\a #\b) (parse '(* (character-ranges (#\a #\z) #\-)) "ab" :junk-allowed t)))
+  (is (equal '(#\a #\b) (parse '(* (character-ranges (#\a #\z) #\-)) "ab1" :junk-allowed t)))
+  (is (equal '(#\a #\b #\-) (parse '(* (character-ranges (#\a #\z) #\-)) "ab-" :junk-allowed t)))
+  (is (or
+	(equal '() (parse '(* (character-ranges (#\a #\z) #\-)) "AB-" :junk-allowed t))
+	(equal '() (parse '(* (character-ranges (#\a #\z) #\-)) "ZY-" :junk-allowed t))))
+  (is (equal '(#\a #\b #\-) (parse '(* character-range) "ab-cd" :junk-allowed t))))
+
 (test esrap
   (smoke-test)
   (bounds-test.1)
