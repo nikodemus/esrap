@@ -265,41 +265,42 @@ and expressions of the form \(~ <literal>) denote case-insensitive terminals."
 	(name-add-rule (make-name "add-rule" name))
 	(name-remove-rule (make-name "remove-rule" name))
 	(name-rule-dependencies (make-name "rule-dependencies" name)))
-    `(let ((,grammar (make-instance 'grammar)))
-       (defmacro ,name-defrule (symbol expression &rest options)
-	 ,(documentation '%defrule 'function)
-	 `(%defrule ,,grammar ,symbol ,expression ,@options))
-       (defun ,name-parse (expression text &key (start 0) end junk-allowed)
-	 ,(documentation '%parse 'function)
-	 (%parse ,grammar expression text
-		 :start start
-		 :end end
-		 :junk-allowed junk-allowed))
-       (defun ,name-describe-grammar (symbol
-				      &optional (stream *standard-output*))
-	 ,(documentation '%describe-grammar 'function)
-	 (%describe-grammar ,grammar symbol stream))
-       (defun ,name-trace-rule (symbol &key recursive break)
-	 ,(documentation '%trace-rule 'function)
-	 (%trace-rule ,grammar symbol :recursive recursive :break break))
-       (defun ,name-untrace-rule (symbol &key recursive break)
-	 ,(documentation '%untrace-rule 'function)
-	 (%untrace-rule ,grammar symbol :recursive recursive :break break))
-       (defun ,name-find-rule (symbol)
-	 ,(documentation '%find-rule 'function)
-	 (%find-rule ,grammar symbol))
-       (defun ,name-change-rule (symbol expression)
-	 ,(documentation '%change-rule 'function)
-	 (%change-rule ,grammar symbol expression))
-       (defun ,name-add-rule (symbol rule)
-	 ,(documentation '%add-rule 'function)
-	 (%add-rule ,grammar symbol rule))
-       (defun ,name-remove-rule (symbol &key (force t))
-	 ,(documentation '%remove-rule 'function)
-	 (%remove-rule ,grammar symbol :force force))
-       (defun ,name-rule-dependencies (rule)
-	 ,(documentation '%rule-dependencies 'function)
-	 (%rule-dependencies ,grammar rule)))))
+    `(eval-when (:compile-toplevel :load-toplevel :execute)
+       (let ((,grammar (make-instance 'grammar)))
+	 (defmacro ,name-defrule (&whole form symbol expression &body options)
+	   ,(documentation '%defrule 'function)
+	   `(%defrule ,',name-add-rule ,form ,symbol ,expression ,@options))
+	 (defun ,name-parse (expression text &key (start 0) end junk-allowed)
+	   ,(documentation '%parse 'function)
+	   (%parse ,grammar expression text
+		   :start start
+		   :end end
+		   :junk-allowed junk-allowed))
+	 (defun ,name-describe-grammar (symbol
+					&optional (stream *standard-output*))
+	   ,(documentation '%describe-grammar 'function)
+	   (%describe-grammar ,grammar symbol stream))
+	 (defun ,name-trace-rule (symbol &key recursive break)
+	   ,(documentation '%trace-rule 'function)
+	   (%trace-rule ,grammar symbol :recursive recursive :break break))
+	 (defun ,name-untrace-rule (symbol &key recursive break)
+	   ,(documentation '%untrace-rule 'function)
+	   (%untrace-rule ,grammar symbol :recursive recursive :break break))
+	 (defun ,name-find-rule (symbol)
+	   ,(documentation '%find-rule 'function)
+	   (%find-rule ,grammar symbol))
+	 (defun ,name-change-rule (symbol expression)
+	   ,(documentation '%change-rule 'function)
+	   (%change-rule ,grammar symbol expression))
+	 (defun ,name-add-rule (symbol rule)
+	   ,(documentation '%add-rule 'function)
+	   (%add-rule ,grammar symbol rule))
+	 (defun ,name-remove-rule (symbol &key (force t))
+	   ,(documentation '%remove-rule 'function)
+	   (%remove-rule ,grammar symbol :force force))
+	 (defun ,name-rule-dependencies (rule)
+	   ,(documentation '%rule-dependencies 'function)
+	   (%rule-dependencies ,grammar rule))))))
 
 (defun clear-rules (grammar)
   (clrhash (grammar-rules grammar))
@@ -589,7 +590,7 @@ are allowed only if JUNK-ALLOWED is true."
                       position
                       (simple-esrap-error text position "Incomplete parse.")))))))
 
-(defmacro %defrule (&whole form grammar symbol expression &body options)
+(defmacro %defrule (name-add-rule form symbol expression &body options)
   "Define SYMBOL as a nonterminal, using EXPRESSION as associated the parsing expression.
 
 Following OPTIONS can be specified:
@@ -699,12 +700,12 @@ Following OPTIONS can be specified:
                             (destructuring-bind ,lambda-list ,production
                               ,@forms)))))))))))
     `(eval-when (:load-toplevel :execute)
-       (%add-rule ,grammar ',symbol
-		  (make-instance 'rule
-				 :expression ',expression
-				 :guard-expression ',guard
-				 :transform ,(or transform '#'identity/bounds)
-				 :condition ,condition)))))
+       (,name-add-rule ',symbol
+		       (make-instance 'rule
+				      :expression ',expression
+				      :guard-expression ',guard
+				      :transform ,(or transform '#'identity/bounds)
+				      :condition ,condition)))))
 
 (defun %add-rule (grammar symbol rule)
   "Associates RULE with the nonterminal SYMBOL. Signals an error if the
