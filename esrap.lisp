@@ -236,13 +236,10 @@ and expressions of the form \(~ <literal>) denote case-insensitive terminals."
 
 ;;; RULE REPRESENTATION AND STORAGE
 ;;;
-;;; For each rule, there is a RULE-CELL in GRAMMAR-RULES, whose %INFO slot has the
+;;; For each rule, there is a RULE-CELL in RULES-TABLE, whose %INFO slot has the
 ;;; function that implements the rule in car, and the rule object in CDR. A
 ;;; RULE object can be attached to only one non-terminal at a time, which is
 ;;; accessible via RULE-SYMBOL.
-
-(defclass grammar ()
-    ((rules :initform (make-hash-table) :accessor grammar-rules)))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defun make-name (suffix &optional name)
@@ -253,9 +250,11 @@ and expressions of the form \(~ <literal>) denote case-insensitive terminals."
 (defmacro make-grammar (name)
   `(%make-grammar ,name))
 
-(defmacro %make-grammar (&optional name)
-  (let ((grammar (gensym))
+(defmacro %make-grammar (&optional name (rules-table-giving-form
+					 '(make-hash-table)))
+  (let ((copy-rules-table (gensym))
 	(name-defrule (make-name "defrule" name))
+	(name-copy-grammar (make-name "copy-grammar" name))
 	(name-parse (make-name "parse" name))
 	(name-describe-grammar (make-name "describe-grammar" name))
 	(name-trace-rule (make-name "trace-rule" name))
@@ -266,44 +265,50 @@ and expressions of the form \(~ <literal>) denote case-insensitive terminals."
 	(name-remove-rule (make-name "remove-rule" name))
 	(name-rule-dependencies (make-name "rule-dependencies" name)))
     `(eval-when (:compile-toplevel :load-toplevel :execute)
-       (let ((,grammar (make-instance 'grammar)))
-	 (defmacro ,name-defrule (&whole form symbol expression &body options)
-	   ,(documentation '%defrule 'function)
-	   `(%defrule ,',name-add-rule ,form ,symbol ,expression ,@options))
-	 (defun ,name-parse (expression text &key (start 0) end junk-allowed)
-	   ,(documentation '%parse 'function)
-	   (%parse ,grammar expression text
-		   :start start
-		   :end end
-		   :junk-allowed junk-allowed))
-	 (defun ,name-describe-grammar (symbol
-					&optional (stream *standard-output*))
-	   ,(documentation '%describe-grammar 'function)
-	   (%describe-grammar ,grammar symbol stream))
-	 (defun ,name-trace-rule (symbol &key recursive break)
-	   ,(documentation '%trace-rule 'function)
-	   (%trace-rule ,grammar symbol :recursive recursive :break break))
-	 (defun ,name-untrace-rule (symbol &key recursive break)
-	   ,(documentation '%untrace-rule 'function)
-	   (%untrace-rule ,grammar symbol :recursive recursive :break break))
-	 (defun ,name-find-rule (symbol)
-	   ,(documentation '%find-rule 'function)
-	   (%find-rule ,grammar symbol))
-	 (defun ,name-change-rule (symbol expression)
-	   ,(documentation '%change-rule 'function)
-	   (%change-rule ,grammar symbol expression))
-	 (defun ,name-add-rule (symbol rule)
-	   ,(documentation '%add-rule 'function)
-	   (%add-rule ,grammar symbol rule))
-	 (defun ,name-remove-rule (symbol &key (force t))
-	   ,(documentation '%remove-rule 'function)
-	   (%remove-rule ,grammar symbol :force force))
-	 (defun ,name-rule-dependencies (rule)
-	   ,(documentation '%rule-dependencies 'function)
-	   (%rule-dependencies ,grammar rule))))))
+       (defmacro ,name-defrule (&whole form symbol expression &body options)
+	 ,(documentation '%defrule 'function)
+	 `(%defrule ,',name-add-rule ,form ,symbol ,expression ,@options))
+       (defmacro ,name-copy-grammar (name)
+	 `(eval-when (:compile-toplevel :load-toplevel :execute)
+	    (%make-grammar ,name (,',copy-rules-table))))
+       (eval-when (:load-toplevel :execute)
+	 (let ((rules-table ,rules-table-giving-form))
+	   (defun ,copy-rules-table ()
+	     (copy-hash-table rules-table))
+	   (defun ,name-parse (expression text &key (start 0) end junk-allowed)
+	     ,(documentation '%parse 'function)
+	     (%parse rules-table expression text
+		     :start start
+		     :end end
+		     :junk-allowed junk-allowed))
+	   (defun ,name-describe-grammar (symbol
+					  &optional (stream *standard-output*))
+	     ,(documentation '%describe-grammar 'function)
+	     (%describe-grammar rules-table symbol stream))
+	   (defun ,name-trace-rule (symbol &key recursive break)
+	     ,(documentation '%trace-rule 'function)
+	     (%trace-rule rules-table symbol :recursive recursive :break break))
+	   (defun ,name-untrace-rule (symbol &key recursive break)
+	     ,(documentation '%untrace-rule 'function)
+	     (%untrace-rule rules-table symbol :recursive recursive :break break))
+	   (defun ,name-find-rule (symbol)
+	     ,(documentation '%find-rule 'function)
+	     (%find-rule rules-table symbol))
+	   (defun ,name-change-rule (symbol expression)
+	     ,(documentation '%change-rule 'function)
+	     (%change-rule rules-table symbol expression))
+	   (defun ,name-add-rule (symbol rule)
+	     ,(documentation '%add-rule 'function)
+	     (%add-rule rules-table symbol rule))
+	   (defun ,name-remove-rule (symbol &key (force t))
+	     ,(documentation '%remove-rule 'function)
+	     (%remove-rule rules-table symbol :force force))
+	   (defun ,name-rule-dependencies (rule)
+	     ,(documentation '%rule-dependencies 'function)
+	     (%rule-dependencies rules-table rule)))))))
 
 (defun clear-rules (grammar)
-  (clrhash (grammar-rules grammar))
+  (clrhash grammar)
   nil)
 
 (defstruct (rule-cell (:constructor
@@ -335,12 +340,12 @@ and expressions of the form \(~ <literal>) denote case-insensitive terminals."
 (defun ensure-rule-cell (grammar symbol)
   (check-type symbol nonterminal)
   ;; FIXME: Need to lock GRAMMAR-RULES.
-  (or (gethash symbol (grammar-rules grammar))
-      (setf (gethash symbol (grammar-rules grammar))
+  (or (gethash symbol grammar)
+      (setf (gethash symbol grammar)
             (make-rule-cell symbol))))
 
 (defun delete-rule-cell (grammar symbol)
-  (remhash symbol (grammar-rules grammar)))
+  (remhash symbol grammar))
 
 (defun reference-rule-cell (grammar symbol referent)
   (let ((cell (ensure-rule-cell grammar symbol)))
@@ -355,7 +360,7 @@ and expressions of the form \(~ <literal>) denote case-insensitive terminals."
 
 (defun find-rule-cell (grammar symbol)
   (check-type symbol nonterminal)
-  (gethash symbol (grammar-rules grammar)))
+  (gethash symbol grammar))
 
 (defclass rule ()
   ((%symbol
