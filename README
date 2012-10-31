@@ -6,7 +6,7 @@ supports:
  - dynamic redefinition of nonterminals
  - inline grammars
  - semantic predicates
- - introspective facilities (decribing grammars, tracing, setting breaks)
+ - introspective facilities (describing grammars, tracing, setting breaks)
 
 Homepage & Documentation:
 
@@ -45,8 +45,9 @@ Syntax overview:
  (~ <literal>)             -- case-insensitive terminal
  character                 -- any single character
  (string length)           -- any string of length
+ (not expression)          -- complement of expression
  (and &rest sequence)
- (or &rest ordered-choises)
+ (or &rest ordered-choices)
  (* greedy-repetition)
  (+ greedy-positive-repetition)
  (? optional)
