@@ -252,7 +252,7 @@ and expressions of the form \(~ <literal>) denote case-insensitive terminals."
 
 (defmacro %make-grammar (&optional name (rules-table-giving-form
 					 '(make-hash-table)))
-  (let ((copy-rules-table (gensym))
+  (let ((copy-rules-table (make-name "copy-rules-table" name))
 	(name-defrule (make-name "defrule" name))
 	(name-copy-grammar (make-name "copy-grammar" name))
 	(name-parse (make-name "parse" name))
