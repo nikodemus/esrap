@@ -586,19 +586,18 @@ Following OPTIONS can be specified:
 
   * (:AROUND ([&BOUNDS START [END]]) &BODY BODY)
 
-    If provided, execute BODY around the construction of the
-    production of the rule. BODY has to call ESRAP:CALL-TRANSFORM to
-    trigger the computation of the, potentially transformed,
-    production. Any transformation provided via :LAMBDA, :FUNCTION
-    or :DESTRUCTURE is executed inside the call to
-    ESRAP:CALL-TRANSFORM. As a result, modification to the dynamic
-    state are visible within the transform.
+    If provided, execute BODY around the construction of the production of the
+    rule. BODY has to call ESRAP:CALL-TRANSFORM to trigger the computation of
+    the production. Any transformation provided via :LAMBDA, :FUNCTION
+    or :DESTRUCTURE is executed inside the call to ESRAP:CALL-TRANSFORM. As a
+    result, modification to the dynamic state are visible within the
+    transform.
 
     ESRAP:&BOUNDS can be used in the same way as described for :LAMBDA
     and :DESTRUCTURE.
 
-    This option can be used to safely track nesting depth, manage
-    symbol tables or for other stack-like operations.
+    This option can be used to safely track nesting depth, manage symbol
+    tables or for other stack-like operations.
 "
   (let ((transform nil)
         (around nil)
