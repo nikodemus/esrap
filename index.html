@@ -1,3 +1,4 @@
+option: --script
 <html lang="en">
 <head>
 <title>Esrap</title>
@@ -101,18 +102,20 @@ consumes a single character if that character matches the terminal.
    <p>Additionally, Esrap supports some pseudoterminals.
 
      <ul>
-<li>The wild terminal symbol <code>character</code>, which always succeeds and
-consumes a single character. 
+<li>The wild terminal symbol <code>character</code> always succeeds, consuming
+and producing a single character. 
+<li>Expressions of the form <code>(character-ranges range ...)</code> match a
+single character from the given range(s), consuming and producing that
+character. A range is can be either a list of the form
+<code>(#\start_char #\stop_char)</code> or a single character. 
 <li>Multicharacter strings can be used to specify sequences of terminals:
 <code>"foo"</code> succeeds and consumes input as if <code>(and #\f #\o
-#\o)</code>. 
-<li>Expressions of the form <code>(string length)</code> can be used
-to specify sequences of arbitrary characters: <code>(string 2)</code> succeeds
-and consumes input as if <code>(and character character)</code>. 
+#\o)</code>. Produces the consumed string. 
+<li>Expressions of the form <code>(string length)</code> can be used to specify
+sequences of arbitrary characters: <code>(string 2)</code> succeeds and
+consumes input as if <code>(and character character)</code>. Produces the
+consumed string. 
 </ul>
-
-   <p>Both normal terminals and pseudoterminals produce the consumed input
-as a string.
 
 <h3 class="heading"><a name="TOC2"></a>Nonterminal</h3>
 
@@ -272,7 +275,22 @@ whatever the predicate function returns.</em>
     using <code>destructuring-bind</code> and the provided lambda-list with <code>:function</code>.
 
           <p><code>destructuring-lambda-list</code> can use <code>esrap:&amp;bounds</code> in the same way
-    as described for <code>:lambda</code>. 
+    as described for <code>:lambda</code>.
+
+          <li><code>(:around ([&amp;bounds start [end]]) &amp;body body)</code>
+
+          <p>If provided, execute <code>body</code> around the construction of the production of the
+    rule. <code>body</code> has to call <code>esrap:call-transform</code> to trigger the computation of
+    the production. Any transformation provided via <code>:lambda</code>, <code>:function</code>
+    or <code>:destructure</code> is executed inside the call to <code>esrap:call-transform</code>. As a
+    result, modification to the dynamic state are visible within the
+    transform.
+
+          <p><code>esrap:&amp;bounds</code> can be used in the same way as described for <code>:lambda</code>
+    and <code>:destructure</code>.
+
+          <p>This option can be used to safely track nesting depth, manage symbol
+    tables or for other stack-like operations. 
 </ul>
         </p></blockquote></div>
 
@@ -415,3 +433,4 @@ recursion cycle consists.
 
 </body></html>
 
+frob: --script
