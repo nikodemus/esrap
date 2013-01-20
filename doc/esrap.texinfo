@@ -75,25 +75,23 @@ Additionally, Esrap supports some pseudoterminals.
 
 @itemize
 @item
-The wild terminal symbol @code{character}, which always succeeds and
-consumes a single character.
+The wild terminal symbol @code{character} always succeeds, consuming
+and producing a single character.
+@item
+Expressions of the form @code{(character-ranges range ...)} match a
+single character from the given range(s), consuming and producing that
+character. A range is can be either a list of the form
+@code{(#\start_char #\stop_char)} or a single character.
 @item
 Multicharacter strings can be used to specify sequences of terminals:
 @code{"foo"} succeeds and consumes input as if @code{(and #\f #\o
-#\o)}.
+#\o)}. Produces the consumed string.
 @item
-Expressions of the form @code{(string length)} can be used
-to specify sequences of arbitrary characters: @code{(string 2)} succeeds
-and consumes input as if @code{(and character character)}.
+Expressions of the form @code{(string length)} can be used to specify
+sequences of arbitrary characters: @code{(string 2)} succeeds and
+consumes input as if @code{(and character character)}. Produces the
+consumed string.
 @end itemize
-@item
-Expressions of the form @code{(character-ranges range ...)}
-A character-range pseudoterminal matches if there is a character left
-and it is inside one of the given ranges. Range can be specified like
-(#\a #\z) or be a simple character.
-
-Both normal terminals and pseudoterminals produce the consumed input
-as a string.
 
 @heading Nonterminal
 Nonterminals are specified using symbols. A nonterminal symbol

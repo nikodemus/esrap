@@ -51,11 +51,6 @@ Esrap TODO
 
     Maybe: Basic two-level cache. (Version of this on a branch.)
 
-*** Character ranges
-    (or "0" "1" "2" "3" "4" "5" "6" "7" "8" "9") can be implemented
-    as (character-ranges (#\0 #\9)) now. The code likely needs 
-    improvement. Similarly (or "foobar" "foo" "bar") can be 
-    implemented using tricks from pkhuong's STRING-CASE.
 * Grammar objects
   Rules should be contained in grammars, so that symbols like CL:IF
   can refer to different rules in different contexts. Grammars can
