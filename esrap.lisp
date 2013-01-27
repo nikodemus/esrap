@@ -454,30 +454,21 @@ ignored."
            ;; When used grammars have been added, reference them and
            ;; recompile rules.
            (when added-used
-             (format t "Use-list of ~A changed~%added: ~A~%" new-value added-used)
              (mapc (rcurry #'reference-grammar existing) added-used)
-
              (dolist (grammar (remove-duplicates
                                (append added-used
                                        (mapcan #'grammar-use-closure added-used))
                                :test #'eq))
-               (format t "~2@TMaybe recompiling in ~A~%" grammar)
                (dolist (cell (hash-table-values (grammar-rules grammar)))
                  (when-let ((rule (cell-rule cell)))
-                   (format t "~4@TMaybe recompiling ~A in ~A~%" rule grammar)
                    (update-rule-dependencies grammar cell (rule-symbol rule))))))
 
            ;; When used grammars have been removed, dereference
            ;; them. We have no choice but "detach" (dereference all
            ;; referenced rules) and recompile all rules.
            (when removed-used
-             (format t "Use-list of ~A changed~%removed: ~A~%"
-                     new-value removed-used)
-
-             (format t "~2@TRecompiling in ~A~%" existing)
              (dolist (cell (hash-table-values (grammar-rules existing)))
                (when-let ((rule (cell-rule cell)))
-                 (format t "~4@TRecompiling ~A in ~A~%" rule existing)
                  (let ((use-new (grammar-use existing))) ; TODO hack
                    (setf (grammar-use existing) (append use-new removed-used))
                    (dereference-rule-dependencies existing rule)
@@ -1286,8 +1277,6 @@ rule is removed first."
 
     (update-rule-dependencies grammar *current-cell* symbol))
 
-  (format t "Added ~A~%" rule) ;; TODO
-
   ;; Return SYMBOL naming rule as handle to rule object.
   symbol)
 
@@ -1347,7 +1336,6 @@ unless :FORCE is true."
          (trace-info (when cell (cell-trace-info cell))))
     (when cell
       (flet ((frob ()
-               (format t "Removing ~A~%" (or (cell-rule cell) cell))
                (set-cell-info cell (undefined-rule-function grammar symbol) nil)
                (when trace-info
                  (setf (cell-trace-info cell) (list (cell-%info cell) (second trace-info))))
@@ -1398,8 +1386,6 @@ designate a grammar, a GRAMMAR-NOT-FOUND-ERROR is signaled."
                                    :recursive nil)))
     (dolist (dep (%rule-direct-dependencies rule))
       (when-let ((dep-cell (find-rule-cell grammar dep)))
-        (let ((*print-level* 3)) ;; TODO
-          (format t "Dereferencing ~A~%" (or (cell-rule dep-cell) dep-cell)))
         (dereference-rule-cell dep-cell cell)))))
 
 (defun update-rule-dependencies (grammar cell symbol)
@@ -1416,16 +1402,10 @@ designate a grammar, a GRAMMAR-NOT-FOUND-ERROR is signaled."
     ;; Check whether CELL is undefined in GRAMMAR (this happens when
     ;; the corresponding is being removed).
     (when (null (cdr (cell-%info cell))) ;; TODO maybe add RULE-DEFINED-P?
-      (let ((*print-level* 3)) ;; TODO
-        (format t "~A is now undefined in ~A~%" (or (cell-rule cell) cell) grammar))
       ;; CELL is undefined. Referent cells in referent grammars have
       ;; to be recompiled in order to create new undefined rules in
       ;; these grammars.
       (dolist (referent (cell-referents cell))
-        (let ((*print-level* 3)) ;; TODO
-          (format t "~2@TReferent ~A has to be recompiled~%" (or (cell-rule referent) referent)))
-        #+no (format t "~6@TRule     ~A~%" (find-rule-cell grammar d :recursive nil))
-        #+no (find-rule-cell grammar reference :recursive nil)
         (pushnew (list referent grammar) recompile)))
 
     ;; Find undefined rules in grammars using GRAMMAR. When these
@@ -1433,23 +1413,11 @@ designate a grammar, a GRAMMAR-NOT-FOUND-ERROR is signaled."
     ;; 1. Remove rule cells marking undefined rules
     ;; 2. Recompile dependent rules
     (dolist (referent (grammar-referents-closure grammar))
-      (format t "Checking ~A~%" referent) ;; TODO
-
       (when-let ((cell (find-rule-cell referent symbol :recursive nil)))
-        (format t "~2@TFound rule ~A~%" cell)
         (when (null (cdr (cell-%info cell)))
-          (format t "~2@TRule is undefined~%")
-
-          ;; TODO(jmoringe, 2012-11-20): remove-rule
-
           (dolist (d (cell-referents cell))
-            (let ((*print-level* 3))
-             (format t "~6@TReferent ~A~%" (or (cell-rule d) d)))
-
             (dereference-rule-cell cell d)
-            #+no (find-rule-cell referent d :recursive nil)
             (pushnew (list d referent) recompile))
-
           (remove-rule symbol :grammar referent))))
 
     ;; Recompile rules discovered above.
@@ -1458,11 +1426,7 @@ designate a grammar, a GRAMMAR-NOT-FOUND-ERROR is signaled."
         (recompile-cell grammar cell)))))
 
 (defun recompile-cell (grammar cell)
-  (let ((*print-level* 3)) ;; TODO(jmoringe, 2013-01-27): remove
-    (format t "?Recompiling ~A~%~9@T~A~%" grammar (or (cell-rule cell) cell)))
   (when-let ((rule (cell-rule cell)))
-    (let ((*print-level* 3))
-      (format t "!Recompiling ~A~%~9@T~A~%" grammar (or (cell-rule cell) cell)))
     (set-cell-info cell
                    (compile-rule grammar
                                  (rule-symbol rule)

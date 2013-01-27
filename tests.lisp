@@ -322,8 +322,6 @@ safe."
   (signals rule-not-found-error (parse 'd "bb" :grammar '#:fez))
 
   ;; After redefinition of B in BAZ:
-  (format t "Defining ~S in ~A~%"
-          'b  '#:baz)
   (eval '(defrule (b :grammar #:baz) (+ "b")))
 
   (signals esrap-error (parse 'd "aa" :grammar '#:fez) "aa")
