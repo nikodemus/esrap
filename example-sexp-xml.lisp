@@ -3,7 +3,7 @@
 (require :esrap)
 
 (defpackage :xml-sexp-grammar
-  (:use :cl :esrap))
+  (:use :cl :esrap :sexp-grammar))
 
 (in-package :xml-sexp-grammar)
 

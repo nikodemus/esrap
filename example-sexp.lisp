@@ -3,7 +3,9 @@
 (require :esrap)
 
 (defpackage :sexp-grammar
-  (:use :cl :esrap))
+  (:use :cl :esrap)
+  (:export
+   :sexp))
 
 (in-package :sexp-grammar)
 
@@ -72,22 +74,22 @@
 #+no (let ((* :use-magic))
   (parse '#:sexp 'sexp "foobar"))
 
-(describe-grammar '#:sexp 'sexp)
+(describe-grammar 'sexp)
 
-(trace-rule '#:sexp 'sexp :recursive t)
+(trace-rule 'sexp :recursive t)
 
 (parse 'sexp "(foo bar 1 quux)")
 
-(untrace-rule '#:sexp 'sexp :recursive t)
+(untrace-rule 'sexp :recursive t)
 
-(defparameter *orig* (rule-expression (find-rule '#:sexp 'sexp)))
+(defparameter *orig* (rule-expression (find-rule 'sexp)))
 
-(change-rule '#:sexp 'sexp '(and (? whitespace) (or list symbol)))
+(change-rule 'sexp '(and (? whitespace) (or list symbol)))
 
 (parse 'sexp "(foo bar quux)")
 
 (parse 'sexp "(foo bar 1 quux)" :junk-allowed t)
 
-(change-rule '#:sexp 'sexp *orig*)
+(change-rule 'sexp *orig*)
 
 (parse 'sexp "(foo bar 1 quux)" :junk-allowed t)
