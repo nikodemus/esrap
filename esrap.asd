@@ -22,7 +22,7 @@
 (in-package :esrap-system)
 
 (defsystem :esrap
-  :version "0.9"
+  :version "0.10"
   :description "A Packrat / Parsing Grammar / TDPL parser for Common Lisp."
   :licence "MIT"
   :depends-on (:alexandria)
