@@ -103,14 +103,6 @@ and an optional transformation rule.
 
 Nonterminals are defined using @code{defrule}.
 
-@emph{Note: Currently all rules share the same namespace, so you
-should not use symbols in the COMMON-LISP package or other shared
-packages to name your rules unless you are certain there are no other
-Esrap using components in your Lisp image. In a future version of
-Esrap grammar objects will be introduced to allow multiple definitions
-of nonterminals. Symbols in the COMMON-LISP package are specifically
-reserved for use by Esrap.}
-
 @heading Sequence
 @lisp
 (and subexpression ...)
@@ -202,9 +194,47 @@ semantic predicate produces whatever the subexpression produces.
 @emph{Note: semantic predicates may change in the future to produce
 whatever the predicate function returns.}
 
+@chapter Grammars
+
+Esrap uses grammar objects to organize sets of rules into reusable
+units. Grammar objects are similar to Common Lisp packages in that they
+consist of
+@enumerate
+
+@item A name
+
+@item A set of used grammars
+
+@item A set of rules
+
+@item An optional documentation string
+
+@end enumerate
+
+Similarly to Common Lisp packages, when one grammar uses another
+grammar, the rules of the used grammar are available as nonterminals in
+rules of the using grammar. However, there are no explicit exported
+rules or name conflicts since rules are named by symbols and can thus
+leverage the mechanisms already provided by the package system.
+
+Redefinitions or grammars and rules are tracked across grammar
+dependencies in order always ensure a consistent state.
+
+@emph{Note: since some of these updates are rather complex, bugs should
+be expected and reported, when encountered.}
+
 @chapter Dictionary
 
 @section Primary Interface
+
+@heading Grammar Objects
+
+@include include/macro-esrap-defgrammar.texinfo
+
+@include include/var-esrap-star-grammar-star.texinfo
+@include include/macro-esrap-in-grammar.texinfo
+
+@heading Rules
 
 @include include/macro-esrap-defrule.texinfo
 @include include/fun-esrap-parse.texinfo
@@ -214,20 +244,41 @@ whatever the predicate function returns.}
 
 @include include/fun-esrap-text.texinfo
 
-@section Introspection and Intercession
+@section Grammar Introspection and Intercession
 
-@include include/fun-esrap-add-rule.texinfo
-@include include/fun-esrap-change-rule.texinfo
-@include include/fun-esrap-find-rule.texinfo
-@include include/fun-esrap-remove-rule.texinfo
+@include include/fun-esrap-grammar-name.texinfo
+@include include/fun-esrap-grammar-dependencies.texinfo
+@include include/fun-esrap-grammar-rules.texinfo
+
+@include include/fun-esrap-find-grammar.texinfo
+@include include/fun-esrap-setf-find-grammar.texinfo
+@include include/fun-esrap-make-grammar.texinfo
+
+@section Rule Introspection and Intercession
+
+@include include/fun-esrap-rule-symbol.texinfo
 @include include/fun-esrap-rule-dependencies.texinfo
 @include include/fun-esrap-rule-expression.texinfo
 @include include/fun-esrap-setf-rule-expression.texinfo
-@include include/fun-esrap-rule-symbol.texinfo
+
+@include include/fun-esrap-find-rule.texinfo
+@include include/fun-esrap-add-rule.texinfo
+@include include/fun-esrap-remove-rule.texinfo
+@include include/fun-esrap-change-rule.texinfo
+
 @include include/fun-esrap-trace-rule.texinfo
 @include include/fun-esrap-untrace-rule.texinfo
 
 @section Error Conditions
+
+@include include/condition-esrap-grammar-not-found-error.texinfo
+@include include/condition-esrap-grammar-not-found-warning.texinfo
+
+@include include/condition-esrap-rule-not-found-error.texinfo
+@include include/condition-esrap-rule-not-found-warning.texinfo
+
+@include include/condition-esrap-invalid-expression-error.texinfo
+@include include/condition-esrap-invalid-expression-warning.texinfo
 
 @include include/condition-esrap-esrap-error.texinfo
 @include include/condition-esrap-left-recursion.texinfo

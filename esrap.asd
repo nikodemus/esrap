@@ -22,12 +22,13 @@
 (in-package :esrap-system)
 
 (defsystem :esrap
-  :version "0.9"
+  :version "0.10"
   :description "A Packrat / Parsing Grammar / TDPL parser for Common Lisp."
   :licence "MIT"
   :depends-on (:alexandria)
   :components ((:file "esrap")
                (:static-file "example-sexp.lisp")
+               (:static-file "example-sexp-xml.lisp")
                (:static-file "example-symbol-table.lisp")
                (:static-file "README")))
 

@@ -29,7 +29,8 @@
            name))
   (setf (gethash name (symbol-table-%table table)) new-value))
 
-
+(defgrammar #:symbol-table)
+(in-grammar #:symbol-table)
 
 (defrule whitespace
     (+ (or #\Space #\Tab #\Newline))

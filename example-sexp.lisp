@@ -3,27 +3,25 @@
 (require :esrap)
 
 (defpackage :sexp-grammar
-  (:use :cl :esrap))
+  (:use :cl :esrap)
+  (:export
+   :sexp))
 
 (in-package :sexp-grammar)
 
-;;; A semantic predicate for filtering out double quotes.
-
-(defun not-doublequote (char)
-  (not (eql #\" char)))
-
-(defun not-integer (string)
-  (when (find-if-not #'digit-char-p string)
+(defun not-integer (partial-result)
+  (when (find-if-not #'digit-char-p (text partial-result))
     t))
+
+(defgrammar #:sexp
+  (:documentation
+   "A simple grammar for S-expressions."))
+(in-grammar #:sexp)
 
 ;;; Utility rules.
 
 (defrule whitespace (+ (or #\space #\tab #\newline))
   (:constant nil))
-
-(defrule alphanumeric (alphanumericp character))
-
-(defrule string-char (or (not-doublequote character) (and #\\ #\")))
 
 ;;; Here we go: an S-expression is either a list or an atom, with possibly leading whitespace.
 
@@ -41,18 +39,18 @@
     (declare (ignore p1 p2 w))
     (cons car cdr)))
 
-(defrule atom (or string integer symbol))
-
-(defrule string (and #\" (* string-char) #\")
+(defrule string (and #\" (* (not #\")) #\")
   (:destructure (q1 string q2)
     (declare (ignore q1 q2))
     (text string)))
+
+(defrule atom (or string integer symbol))
 
 (defrule integer (+ (or "0" "1" "2" "3" "4" "5" "6" "7" "8" "9"))
   (:lambda (list)
     (parse-integer (text list) :radix 10)))
 
-(defrule symbol (not-integer (+ alphanumeric))
+(defrule symbol (not-integer (+ (or (alphanumericp character) #\< #\> #\/ #\- #\_ #\?)))
   ;; NOT-INTEGER is not strictly needed because ATOM considers INTEGER before
   ;; a STRING, we know can accept all sequences of alphanumerics -- we already
   ;; know it isn't an integer.
@@ -60,6 +58,8 @@
     (intern (text list))))
 
 ;;;; Try these
+
+(find-grammar '#:sexp)
 
 (parse 'sexp "FOO123")
 
@@ -71,8 +71,8 @@
 
 (parse 'sexp "foobar")
 
-(let ((* :use-magic))
-  (parse 'sexp "foobar"))
+#+no (let ((* :use-magic))
+  (parse '#:sexp 'sexp "foobar"))
 
 (describe-grammar 'sexp)
 

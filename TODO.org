@@ -9,7 +9,7 @@ Esrap TODO
 
     ...and even if the whole parse fails, we use the additional
     information only to display a fancy error message.
-    
+
     So: unless PARSE has been called with :DEBUG T, use the fixnum
     indicating the position to indicate a failed parse.
 
@@ -50,12 +50,10 @@ Esrap TODO
     Maybe: PCL-style multikey cache.
 
     Maybe: Basic two-level cache. (Version of this on a branch.)
-
-* Grammar objects
-  Rules should be contained in grammars, so that symbols like CL:IF
-  can refer to different rules in different contexts. Grammars can
-  also enforce rule numbering, making caching results easier. It
-  should be possible to inherit from other grammars.
+*** Character ranges
+    (or "0" "1" "2" "3" "4" "5" "6" "7" "8" "9") can be implemented
+    with a range-check for char-code. Similarly (or "foobar" "foo"
+    "bar") can be implemented using tricks from pkhuong's STRING-CASE.
 * Character classes
   Have a standard-grammar that defines things like DIGIT, WHITESPACE,
   ASCII, etc.
@@ -68,5 +66,3 @@ Esrap TODO
 * Transform Subseq
   (defrule decimal (+ (or "0" "1" ...))
     (:subseq-function parse-integer))
-
-
