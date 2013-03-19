@@ -26,7 +26,7 @@
 
 In addition to regular Packrat / Parsing Grammar / TDPL features Esrap
 supports dynamic redefinition of nonterminals, inline grammars,
-semantic predicates, and include introspecive facilities for
+semantic predicates, and include introspective facilities for
 development.
 
 Esrap is maintained in Git:
@@ -77,8 +77,8 @@ and producing a single character.
 @item
 Expressions of the form @code{(character-ranges range ...)} match a
 single character from the given range(s), consuming and producing that
-character. A range is can be either a list of the form
-@code{(#\start_char #\stop_char)} or a single character.
+character. A range can be either a list of the form @code{(#\start_char
+#\stop_char)} or a single character.
 @item
 Multicharacter strings can be used to specify sequences of terminals:
 @code{"foo"} succeeds and consumes input as if @code{(and #\f #\o
@@ -192,7 +192,7 @@ produces @code{nil}.
 @end lisp
 
 The @code{predicate-name} is a symbol naming a global function. A
-semantic predicate succeeds if subsexpression succeeds @emph{and} the
+semantic predicate succeeds if subexpression succeeds @emph{and} the
 named function returns true for the production of the subexpression. A
 semantic predicate produces whatever the subexpression produces.
 
