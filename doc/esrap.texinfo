@@ -48,6 +48,10 @@ For more on packrat parsing, see
 @url{http://pdos.csail.mit.edu/~baford/packrat/thesis/} for Bryan Ford's 2002
 thesis: ``Packrat Parsing: a Practical Linear Time Algorithm with Backtracking''.
 
+For left recursion support in packrat parsers, see
+@url{http://www.vpri.org/pdf/tr2007002_packrat.pdf} for A. Warth et al's
+2008 paper: ``Packrat Parsers Can Support Left Recursion''.
+
 @contents
 
 @ifnottex
@@ -202,6 +206,24 @@ semantic predicate produces whatever the subexpression produces.
 @emph{Note: semantic predicates may change in the future to produce
 whatever the predicate function returns.}
 
+@heading Left Recursion
+
+One aspect of designing Esrap rules is @emph{left recursion}. A
+@emph{direct left recursive} rule is of the form
+@lisp
+(defrule left-recursion (or (and left-recursion STUFF) ALTERNATIVES))
+@end lisp
+The simplest @emph{indirect left recursive} rule is of the form
+@lisp
+(defrule left-recursion.1 left-recursion.2)
+(defrule left-recursion.2 (or (and left-recursion.1 STUFF) ALTERNATIVES))
+@end lisp
+
+Esrap can handle both kinds of left recursive rules, but the linear-time
+guarantee generally no longer holds in such cases. The special variable
+@code{*error-on-left-recursion*} can be used to control Esrap's behavior
+with respect to allowing left recursion.
+
 @chapter Dictionary
 
 @section Primary Interface
@@ -228,6 +250,8 @@ whatever the predicate function returns.}
 @include include/fun-esrap-untrace-rule.texinfo
 
 @section Error Conditions
+
+@include include/var-esrap-star-error-on-left-recursion-star.texinfo
 
 @include include/condition-esrap-esrap-error.texinfo
 @include include/condition-esrap-left-recursion.texinfo

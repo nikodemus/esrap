@@ -22,7 +22,7 @@
 (in-package :esrap-system)
 
 (defsystem :esrap
-  :version "0.9"
+  :version "0.10"
   :description "A Packrat / Parsing Grammar / TDPL parser for Common Lisp."
   :licence "MIT"
   :depends-on (:alexandria)
@@ -30,6 +30,10 @@
                (:static-file "example-sexp.lisp")
                (:static-file "example-symbol-table.lisp")
                (:static-file "README")))
+
+(defmethod perform :after ((op load-op) (sys (eql (find-system :esrap))))
+  ;; Since version 0.10
+  (pushnew :esrap.can-handle-left-recursion *features*))
 
 (defsystem :esrap-tests
   :description "Tests for ESRAP."

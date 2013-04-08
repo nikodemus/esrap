@@ -19,6 +19,11 @@ References:
 
     http://pdos.csail.mit.edu/~baford/packrat/thesis/
 
+  * A. Warth et al, 2008, "Packrat Parsers Can Support Left
+    Recursion".
+
+    http://www.vpri.org/pdf/tr2007002_packrat.pdf
+
 Licence:
 
  Copyright (c) 2007-2011 Nikodemus Siivola <nikodemus@sb-studio.net>
