@@ -141,8 +141,6 @@
           (declare (ignore whitespace))
           (cons token list)))))
 
-(defrule left-recursion (and left-recursion "l"))
-
 (test bounds.1
   (is (equal '("foo[0-3]")
              (parse 'tokens/bounds.1 "foo")))
@@ -154,6 +152,72 @@
              (parse 'tokens/bounds.2 "foo")))
   (is (equal '("foo(0-3)" "bar(4-7)" "quux(11-15)")
              (parse 'tokens/bounds.2 "foo bar    quux"))))
+
+;;; Left recursion tests
+
+(defun make-input-and-expected-result (size)
+  (labels ((make-expected (size)
+             (if (plusp size)
+                 (list (make-expected (1- size)) "l")
+                 "r")))
+    (let ((expected (make-expected size)))
+      (values (apply #'concatenate 'string (flatten expected)) expected))))
+
+(defrule left-recursion.direct
+    (or (and left-recursion.direct #\l) #\r))
+
+(test left-recursion.direct.success
+  "Test parsing with one left recursive rule for different inputs."
+  (dotimes (i 20)
+    (multiple-value-bind (input expected)
+        (make-input-and-expected-result i)
+      (is (equal expected (parse 'left-recursion.direct input))))))
+
+(test left-recursion.direct.condition
+  "Test signaling of `left-recursion' condition if requested."
+  (let ((*error-on-left-recursion* t))
+    (signals (left-recursion)
+      (parse 'left-recursion.direct "l"))
+    (handler-case (parse 'left-recursion.direct "l")
+      (left-recursion (condition)
+        (is (string= (esrap-error-text condition) "l"))
+        (is (= (esrap-error-position condition) 0))
+        (is (eq (left-recursion-nonterminal condition)
+                'left-recursion.direct))
+        (is (equal (left-recursion-path condition)
+                   '(left-recursion.direct
+                     left-recursion.direct)))))))
+
+(defrule left-recursion.indirect.1 left-recursion.indirect.2)
+
+(defrule left-recursion.indirect.2 (or (and left-recursion.indirect.1 "l") "r"))
+
+(test left-recursion.indirect.success
+  "Test parsing with mutually left recursive rules for different
+   inputs."
+  (dotimes (i 20)
+    (multiple-value-bind (input expected)
+        (make-input-and-expected-result i)
+      (is (equal expected (parse 'left-recursion.indirect.1 input)))
+      (is (equal expected (parse 'left-recursion.indirect.2 input))))))
+
+(test left-recursion.indirect.condition
+  "Test signaling of `left-recursion' condition if requested."
+  (let ((*error-on-left-recursion* t))
+    (signals (left-recursion)
+      (parse 'left-recursion.indirect.1 "l"))
+    (handler-case (parse 'left-recursion.indirect.1 "l")
+      (left-recursion (condition)
+        (is (string= (esrap-error-text condition) "l"))
+        (is (= (esrap-error-position condition) 0))
+        (is (eq (left-recursion-nonterminal condition)
+                'left-recursion.indirect.1))
+        (is (equal (left-recursion-path condition)
+                   '(left-recursion.indirect.1
+                     left-recursion.indirect.2
+                     left-recursion.indirect.1)))))))
+
+;;; Test conditions
 
 (test condition.1
   "Test signaling of `esrap-simple-parse-error' conditions for failed
@@ -181,19 +245,6 @@
     (signals-esrap-error ("1, " 1 ("Incomplete parse."
                                    "Encountered at"))
       (parse 'list-of-integers "1, "))))
-
-(test condition.2
-  "Test signaling of `left-recursion' condition."
-  (signals (left-recursion)
-    (parse 'left-recursion "l"))
-  (handler-case (parse 'left-recursion "l")
-    (left-recursion (condition)
-      (is (string= (esrap-error-text condition) "l"))
-      (is (= (esrap-error-position condition) 0))
-      (is (eq (left-recursion-nonterminal condition)
-              'left-recursion))
-      (is (equal (left-recursion-path condition)
-                 '(left-recursion left-recursion))))))
 
 (test parse.string
   "Test parsing an arbitrary string of a given length."
@@ -315,6 +366,38 @@
   (is (eql 123 (parse '(oddp decimal) "123")))
   (is (equal '(nil 0) (multiple-value-list
                        (parse '(evenp decimal) "123" :junk-allowed t)))))
+
+;;; Examples in separate files
+
+(test example-left-recursion.left-associative
+  "Left associate grammar from example-left-recursion.lisp."
+  ;; Should be parsable without
+  (let ((*error-on-left-recursion* t))
+    (is (equal (parse 'left-recursive-grammars:la-expr "1*2+3*4+5")
+               '(+ (* 1 2) (+ (* 3 4) 5))))))
+
+(test example-left-recursion.right-associative
+  "Right associate grammar from example-left-recursion.lisp."
+  ;; This grammar should
+  (let ((*error-on-left-recursion* t))
+    (signals left-recursion
+      (parse 'left-recursive-grammars:ra-expr "1*2+3*4+5")))
+
+  (is (equal (parse 'left-recursive-grammars:ra-expr "1*2+3*4+5")
+             '(+ (+ (* 1 2) (* 3 4)) 5))))
+
+(test example-left-recursion.warth
+  "Warth's Java expression example from example-left-recursion.lisp."
+ (mapc
+  (curry #'apply
+         (lambda (input expected)
+           (is (equal expected
+                      (parse 'left-recursive-grammars:primary input)))))
+  '(("this"       "this")
+    ("this.x"     (:field-access "this" "x"))
+    ("this.x.y"   (:field-access (:field-access "this" "x") "y"))
+    ("this.x.m()" (:method-invocation (:field-access "this" "x") "m"))
+    ("x[i][j].y"  (:field-access (:array-access (:array-access "x" "i") "j") "y")))))
 
 (defun run-tests ()
   (let ((results (run 'esrap)))

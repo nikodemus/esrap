@@ -11,6 +11,10 @@
 ;;;;     Algorithm with Backtracking".
 ;;;;     http://pdos.csail.mit.edu/~baford/packrat/thesis/
 ;;;;
+;;;;   * Alessandro Warth, James R. Douglass, Todd Millstein, 2008,
+;;;;     "Packrat Parsers Can Support Left Recursion".
+;;;;     http://www.vpri.org/pdf/tr2007002_packrat.pdf
+;;;;
 ;;;; Licence:
 ;;;;
 ;;;;  Permission is hereby granted, free of charge, to any person
@@ -38,6 +42,8 @@
 
    #:! #:? #:+ #:* #:& #:~
    #:character-ranges
+
+   #:*error-on-left-recursion*
 
    #:add-rule
    #:call-transform
@@ -149,10 +155,14 @@ the error occurred."))
   ((nonterminal :initarg :nonterminal :initform nil :reader left-recursion-nonterminal)
    (path :initarg :path :initform nil :reader left-recursion-path))
   (:documentation
-   "Signaled when left recursion is detected during Esrap parsing.
-LEFT-RECURSION-NONTERMINAL names the symbol for which left recursion was
-detected, and LEFT-RECURSION-PATH lists nonterminals of which the left
-recursion cycle consists."))
+   "May be signaled when left recursion is detected during Esrap parsing.
+
+LEFT-RECURSION-NONTERMINAL names the symbol for which left recursion
+was detected, and LEFT-RECURSION-PATH lists nonterminals of which the
+left recursion cycle consists.
+
+Note: This error is only signaled if *ERROR-ON-LEFT-RECURSION* is
+bound to a non-NIL value."))
 
 (defmethod print-object :before ((condition left-recursion) stream)
   (format stream "Left recursion in nonterminal ~S. ~_Path: ~
@@ -160,7 +170,26 @@ recursion cycle consists."))
           (left-recursion-nonterminal condition)
           (left-recursion-path condition)))
 
+(defun left-recursion (text position nonterminal path-butlast)
+  (error 'left-recursion
+         :text text
+         :position position
+         :nonterminal nonterminal
+         :path (append path-butlast (list nonterminal))))
+
 ;;; Miscellany
+
+(declaim (special *error-on-left-recursion*))
+
+(defvar *error-on-left-recursion* nil
+  "This special variable can be used to control Esrap's behavior with
+respect to allowing left recursion.
+
+When non-NIL, PARSE signals an error when it encounters a left
+recursive rule. Otherwise the rule is processed.
+
+Note: when processing left recursive rules, linear-time guarantees
+generally no longer hold.")
 
 (defun text (&rest arguments)
   "Arguments must be strings, or lists whose leaves are strings.
@@ -447,27 +476,123 @@ symbols."
 (defun (setf get-cached) (result symbol position cache)
   (setf (gethash (cons symbol position) cache) result))
 
+;; In case of left recursion, this stores
+(defstruct head
+  ;; the rule at which the left recursion started
+  (rule (required-argument) :type symbol)
+  ;; the set of involved rules
+  (involved-set '() :type list)
+  ;; and the set of rules which rules which can still be applied in
+  ;; the current round of "seed parse" growing
+  (eval-set '() :type list))
+
+(defvar *heads*)
+
+(defun make-heads ()
+  (make-hash-table :test #'equal))
+
+(defun get-head (position heads)
+  (gethash position heads))
+
+(defun (setf get-head) (head position heads)
+  (setf (gethash position heads) head))
+
+(defun recall (rule position cache heads thunk)
+  (let ((result (get-cached rule position cache))
+        (head (get-head position heads)))
+    (cond
+      ;; If not growing a seed parse, just return what is stored in
+      ;; the cache.
+      ((not head)
+       result)
+      ;; Do not evaluate any rule that is not involved in this left
+      ;; recursion.
+      ((and (not result) (not (or (eq rule (head-rule head))
+                             (member rule (head-involved-set head)))))
+       (make-failed-parse :position position))
+      ;; Allow involved rules to be evaluated, but only once, during a
+      ;; seed-growing iteration. Subsequent requests just return what
+      ;; is stored in the cache.
+      (t
+       (when (member rule (head-eval-set head))
+         (removef (head-eval-set head) rule :count 1)
+         (setf result (funcall thunk position)
+               (get-cached rule position cache) result))
+       result))))
+
 (defvar *nonterminal-stack* nil)
 
-;;; SYMBOL, POSITION, and CACHE must all be lexical variables!
+;;; SYMBOL and POSITION must all lexical variables!
 (defmacro with-cached-result ((symbol position &optional (text nil)) &body forms)
-  (with-gensyms (cache result)
-    `(let* ((,cache *cache*)
-            (,result (get-cached ,symbol ,position ,cache))
-            (*nonterminal-stack* (cons ,symbol *nonterminal-stack*)))
-       (cond ((eq t ,result)
-              (error 'left-recursion
-                     :text ,text
-                     :position ,position
-                     :nonterminal ,symbol
-                     :path (reverse *nonterminal-stack*)))
-             (,result
-              ,result)
-             (t
-              ;; First mark this pair with T to detect left-recursion,
-              ;; then compute the result and cache that.
-              (setf (get-cached ,symbol ,position ,cache) t
-                    (get-cached ,symbol ,position ,cache) (locally ,@forms)))))))
+  (with-gensyms (cache heads result)
+    `(flet ((do-it (position) ,@forms))
+       (let* ((,cache *cache*)
+              (,heads *heads*)
+              (,result (recall ,symbol ,position ,cache ,heads #'do-it)))
+         (cond
+           ;; Found left-recursion marker in the cache. Depending on
+           ;; *ERROR-ON-LEFT-RECURSION*, we either signal an error or
+           ;; prepare recovery from this situation (which is performed
+           ;; by one of the "cache miss" cases (see below) up the
+           ;; call-stack).
+           ((left-recursion-result-p ,result)
+            ;; If error on left-recursion has been requested, do that.
+            (when *error-on-left-recursion*
+              (left-recursion ,text,position ,symbol
+                              (reverse (mapcar #'left-recursion-result-rule
+                                               *nonterminal-stack*))))
+            ;; Otherwise, mark left recursion and fail this partial
+            ;; parse.
+            (let ((head (or (left-recursion-result-head ,result)
+                            (setf (left-recursion-result-head ,result)
+                                  (make-head :rule ,symbol)))))
+              ;; Put this head into left recursion markers on the
+              ;; stack. Add rules on the stack to the "involved set".
+              (dolist (item *nonterminal-stack*)
+                (when (eq (left-recursion-result-head item) head)
+                  (return))
+                (setf (left-recursion-result-head item) head)
+                (pushnew (left-recursion-result-rule item)
+                         (head-involved-set head))))
+            (make-failed-parse :expression ,symbol
+                               :position ,position))
+           ;; Cache hit without left-recursion.
+           (,result
+            ,result)
+           ;; Cache miss.
+           (t
+            ;; First add a left recursion marker for this pair, then
+            ;; compute the result, potentially recovering from left
+            ;; recursion and cache that.
+            (let* ((result (make-left-recursion-result :rule ,symbol))
+                   (result1
+                     (let ((*nonterminal-stack* (cons result *nonterminal-stack*)))
+                       (setf (get-cached ,symbol ,position ,cache)
+                             result
+                             (get-cached ,symbol ,position ,cache)
+                             (do-it position)))))
+              ;; If we detect left recursion, handle it.
+              (when (and (not (error-result-p result1))
+                         (left-recursion-result-head result))
+                (let ((head (left-recursion-result-head result)))
+                  ;; Grow "seed parse" (grow-lr in the paper):
+                  ;; repeatedly apply rules involved in left-recursion
+                  ;; until no progress can be made.
+                  (setf (get-head ,position ,heads) head)
+                  (loop
+                    (setf (head-eval-set head)
+                          (copy-list (head-involved-set head)))
+                    (let ((result2 (do-it ,position)))
+                      (when (or (error-result-p result2)
+                                (<= (result-position result2)
+                                    (result-position result1))) ; no progress
+                        (return))
+                      (setf (get-cached ,symbol ,position ,cache)
+                            (%make-result :position (result-position result2)
+                                          :%production (result-%production result2))
+                            result1 result2)))
+                  (setf (get-head ,position ,heads) nil)))
+              result1)))))))
 
 ;;; RESULT REPRESENTATION
 ;;;
@@ -490,6 +615,12 @@ symbols."
   (position (required-argument) :type array-index)
   ;; A nested error, closer to actual failure site.
   detail)
+
+;; This is placed in the cache as a place in which information
+;; regarding left recursion can be stored temporarily.
+(defstruct (left-recursion-result (:include error-result))
+  (rule (required-argument) :type symbol)
+  (head nil :type (or null head)))
 
 (defstruct (result (:constructor %make-result))
   ;; Either a list of results, whose first element is the production, or a
@@ -524,10 +655,11 @@ are allowed only if JUNK-ALLOWED is true."
   ;; There is no backtracking in the toplevel expression -- so there's
   ;; no point in compiling it as it will be executed only once -- unless
   ;; it's a constant, for which we have a compiler-macro.
-  (let ((end (or end (length text))))
+  (let ((end (or end (length text)))
+        (*cache* (make-cache))
+        (*heads* (make-heads)))
     (process-parse-result
-     (let ((*cache* (make-cache)))
-       (eval-expression expression text start end))
+     (eval-expression expression text start end)
      text
      end
      junk-allowed)))
@@ -542,6 +674,7 @@ are allowed only if JUNK-ALLOWED is true."
            ;; about evaluation order.
            ((lambda (text &key (start 0) end junk-allowed)
               (let ((*cache* (make-cache))
+                    (*heads* (make-heads))
                     (end (or end (length text))))
                 (process-parse-result
                  (funcall ,expr-fun text start end)
