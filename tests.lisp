@@ -276,6 +276,8 @@
     (is (equal "Foo" t3c))
     (is (equal "Foo" t3e))))
 
+;;; Test around
+
 (declaim (special *depth*))
 (defvar *depth* nil)
 
@@ -332,15 +334,42 @@
                             (0 . (0 . 7)))
                            . "baz"))))
 
+;;; Test character ranges
+
 (defrule character-range (character-ranges (#\a #\b) #\-))
 
-(test character-range-test
+(test character-range
   (is (equal '(#\a #\b) (parse '(* (character-ranges (#\a #\z) #\-)) "ab" :junk-allowed t)))
   (is (equal '(#\a #\b) (parse '(* (character-ranges (#\a #\z) #\-)) "ab1" :junk-allowed t)))
   (is (equal '(#\a #\b #\-) (parse '(* (character-ranges (#\a #\z) #\-)) "ab-" :junk-allowed t)))
   (is (not (parse '(* (character-ranges (#\a #\z) #\-)) "AB-" :junk-allowed t)))
   (is (not (parse '(* (character-ranges (#\a #\z) #\-)) "ZY-" :junk-allowed t)))
   (is (equal '(#\a #\b #\-) (parse '(* character-range) "ab-cd" :junk-allowed t))))
+
+;;; Test multiple transforms
+
+(defrule multiple-transforms.1
+    (and #\a #\1 #\c)
+  (:function second)
+  (:text t)
+  (:function parse-integer))
+
+(test multiple-transforms.1
+  (is (equal (parse 'multiple-transforms.1 "a1c") 1)))
+
+(test multiple-transforms.2
+
+  (dolist (form '((defrule multiple-transforms.2 #\1
+                    (:text t)
+                    (:lambda (x &bounds start end)
+                      (parse-integer x)))
+                  (defrule multiple-transforms.3 #\1
+                    (:text t)
+                    (:lambda (x &bounds start)
+                      (parse-integer x)))))
+    (signals simple-error (eval form))))
+
+;;; Test runner
 
 (defun run-tests ()
   (let ((results (run 'esrap)))
