@@ -29,9 +29,6 @@ supports dynamic redefinition of nonterminals, inline grammars,
 semantic predicates, and include introspecive facilities for
 development.
 
-Esrap is maintained courtesy of @url{http://sb-studio.net/, Steel Bank
-Studio Ltd} by @email{nikodemus@@sb-studio.net, Nikodemus Siivola}.
-
 Esrap is maintained in Git:
 @example
 git clone git://github.com/nikodemus/esrap.git
