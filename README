@@ -56,23 +56,33 @@ Syntax overview:
  (! not-followed-by)       -- does not consume
  (<predicate> expr)        -- semantic parsing
 
- See file example-sexp.lisp for a complete sample grammar and usage.
+ See file example-sexp.lisp for a complete sample grammar and usage,
+ and example-symbol-table.lisp for a grammar with lexical scope.
 
 Trivial examples:
 
+ ;; Parse takes a expression
  (parse '(or "foo" "bar") "foo")         => "foo", NIL
 
+ ;; New rules can be added.
+ ;;
+ ;; Normally you'd use the declarative DEFRULE interface to define new
+ ;; rules, but everything it does can be done directly by building
+ ;; instances of the RULE class and using ADD-RULE to activate them.
  (add-rule 'foo+ (make-instance 'rule :expression '(+ "foo"))) => FOO+
 
  (parse 'foo+ "foofoofoo")               => ("foo" "foo" "foo"), NIL
 
+ ;; Rules can transform their matches.
  (add-rule 'decimal
            (make-instance 'rule
             :expression '(+ (or "0" "1" "2" "3" "4" "5" "6" "7" "8" "9"))
-            :transform (lambda (list)
+            :transform (lambda (list start end)
+                         (declare (ignore start end))
                          (parse-integer (format nil "~{~A~}" list)))))
   => DECIMAL
 
+ ;; Any lisp function can be used as a semantic predicate.
  (parse '(oddp decimal) "123")                  => 123
 
  (parse '(evenp decimal) "123" :junk-allowed t) => NIL, 0

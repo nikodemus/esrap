@@ -264,6 +264,25 @@
   (is (not (parse '(* (character-ranges (#\a #\z) #\-)) "ZY-" :junk-allowed t)))
   (is (equal '(#\a #\b #\-) (parse '(* character-range) "ab-cd" :junk-allowed t))))
 
+(test examples-from-readme-test
+  (is (equal '("foo" nil)
+             (multiple-value-list (parse '(or "foo" "bar") "foo"))))
+  (is (eq 'foo+ (add-rule 'foo+
+                          (make-instance 'rule :expression '(+ "foo")))))
+  (is (equal '("foo" "foo" "foo")
+             (multiple-value-list (parse 'foo+ "foofoofoo"))))
+  (is (eq 'decimal
+          (add-rule 'decimal
+                    (make-instance 'rule
+                                   :expression `(+ (or "0" "1" "2" "3" "4" "5" "6" "7"
+                                                       "8" "9"))
+                                   :transform (lambda (list start end)
+                                                (declare (ignore start end))
+                                                (parse-integer (format nil "~{~A~}" list)))))))
+  (is (eql 123 (parse '(oddp decimal) "123")))
+  (is (equal '(nil 0)
+             (multiple-value-list (parse '(evenp decimal) "123" :junk-allowed t)))))
+
 (defun run-tests ()
   (let ((results (run 'esrap)))
     (eos:explain! results)
