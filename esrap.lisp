@@ -314,7 +314,7 @@ and expressions of the form \(~ <literal>) denote case-insensitive terminals."
    ;; to find out if the rule is active or not.
    (%condition
     :initarg :condition
-    :initform nil
+    :initform t
     :reader rule-condition)
    (%transform
     :initarg :transform
