@@ -489,6 +489,7 @@ are allowed only if JUNK-ALLOWED is true."
      end
      junk-allowed)))
 
+#-ecl
 (define-compiler-macro parse (&whole form expression &rest arguments
                               &environment env)
   (if (constantp expression env)
