@@ -49,15 +49,20 @@ Syntax overview:
  (character-ranges ranges) -- character ranges
  (and &rest sequence)
  (or &rest ordered-choices)
- (* greedy-repetition)
+ (* [[from] to] greedy-repetition)
  (+ greedy-positive-repetition)
  (? optional)
  (& followed-by)           -- does not consume
  (! not-followed-by)       -- does not consume
  (<predicate> expr)        -- semantic parsing
 
+ FROM and TO in (* ...) form may be arbitrary forms (e.g. special variables), but use with caution -
+ feature is experimental and probably does not handle local environment correctly.
+
  See file example-sexp.lisp for a complete sample grammar and usage,
- and example-symbol-table.lisp for a grammar with lexical scope.
+ example-symbol-table.lisp for a grammar with lexical scope,
+ example-very-context-sensitive.lisp for more complex example of context-sensitive grammar,
+ and tests.lisp for various rather trivial use-cases.
 
 Trivial examples:
 

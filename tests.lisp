@@ -324,6 +324,19 @@
   (is (equal '(("oofoofoof") nil)
 	     (multiple-value-list (parse 'simple-wrapped "goofoofoof")))))
 
+(defparameter dyna-from 3)
+(defparameter dyna-to 5)
+
+(defrule dyna-from-to (* dyna-from dyna-to "a")
+  (:text t))
+
+(defrule dyna-from-tos (* dyna-from-to))
+
+(test dynamic-times
+  (is (equal '("aaaaa" "aaa") (parse 'dyna-from-tos "aaaaaaaa")))
+  (is (equal '("aaaa" "aaaa") (let ((dyna-to 4))
+				(parse 'dyna-from-tos "aaaaaaaa")))))
+
 (defun run-tests ()
   (let ((results (run 'esrap)))
     (eos:explain! results)

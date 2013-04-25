@@ -1021,6 +1021,8 @@ inspection."
                  (typep (second expression) 'array-length)))
            (character-ranges
             (and (every #'validate-character-range (cdr expression)) t))
+	   (* (and (>= (length expression) 2)
+		   (validate-expression (car (last expression)))))
            (t
             (and (symbolp (car expression))
                  (cdr expression) (not (cddr expression))
@@ -1095,8 +1097,8 @@ inspection."
         (eval-ordered-choise expression text position end))
        (not
         (eval-negation expression text position end))
-       (*
-        (eval-greedy-repetition expression text position end))
+       (* (cond ((equal (length expression) 2) (eval-greedy-repetition expression))
+		(t (eval-times expression))))
        (+
         (eval-greedy-positive-repetition expression text position end))
        (?
@@ -1109,7 +1111,7 @@ inspection."
         (eval-character-ranges expression text position end))
        (t
         (if (symbolp (car expression))
-            (eval-semantic-predicate expression text position end)
+	    (eval-semantic-predicate expression text position end)
             (invalid-expression-error expression)))))
     (t
      (invalid-expression-error expression))))
@@ -1134,8 +1136,8 @@ inspection."
         (compile-ordered-choise expression))
        (not
         (compile-negation expression))
-       (*
-        (compile-greedy-repetition expression))
+       (* (cond ((equal (length expression) 2) (compile-greedy-repetition expression))
+		(t (compile-times expression))))
        (+
         (compile-greedy-positive-repetition expression))
        (?
@@ -1148,7 +1150,7 @@ inspection."
         (compile-character-ranges expression))
        (t
         (if (symbolp (car expression))
-            (compile-semantic-predicate expression)
+	    (compile-semantic-predicate expression)
             (invalid-expression-error expression)))))
     (t
      (invalid-expression-error expression))))
@@ -1377,6 +1379,8 @@ inspection."
 
 ;;; Negations
 
+
+
 (defun exec-negation (fun expr text position end)
   (if (and (< position end)
            (error-result-p (funcall fun text position end)))
@@ -1419,6 +1423,35 @@ inspection."
           (make-result
            :position position
            :production (mapcar #'result-production results)))))))
+
+(defun eval-times (expression text position end)
+  (funcall (compile-times expression) text position end))
+
+(defun compile-times (expression)
+  (destructuring-bind (from to subexpr)
+      (if (equal (length expression) 3)
+	  `(0 ,@(cdr expression))
+	  (cdr expression))
+    (eval `(let ((function (compile-expression ',subexpr)))
+	     (named-lambda compiled-times (text position end)
+	       (let* ((last nil)
+		      (results
+		       (iter (for i from 1 to ,to)
+			     (for result next (funcall function text position end))
+			     (until (or (error-result-p (setf last result))
+					(if-first-time nil
+						       (equal (result-position result) position))))
+			     (setf position (result-position result))
+			     (collect result))))
+		 (if (>= (length results) ,from)
+		     (make-result
+		      :position position
+		      :production (mapcar #'result-production results))
+		     (make-failed-parse
+		      :position position
+		      :expression ',expression
+		      :detail last))))))))
+
 
 ;;; Greedy positive repetitions
 
