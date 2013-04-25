@@ -25,7 +25,7 @@
   :version "0.9"
   :description "A Packrat / Parsing Grammar / TDPL parser for Common Lisp."
   :licence "MIT"
-  :depends-on (:alexandria :defmacro-enhance :iterate)
+  :depends-on (:alexandria :defmacro-enhance :iterate :rutils)
   :components ((:file "esrap")
                (:static-file "example-sexp.lisp")
                (:static-file "example-symbol-table.lisp")

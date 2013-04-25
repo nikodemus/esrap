@@ -33,31 +33,41 @@
 		(text (make-string isps :initial-element #\space)
 		      line)))
 
+(defun more-indented-block-p (explicit-block)
+  (>= (caddr explicit-block)
+      indent))
+
 (defrule explicit-indented-block (wrap indent-spec-line
-				       (* (and (! indent-spec-line)
-					       indented-line)))
+				       (* (or (more-indented-block-p explicit-indented-block)
+					      (and (! indent-spec-line)
+						   indented-line))))
   (:wrap-around (let ((indent wrapper))
 		  (call-parser)))
   (:lambda (lst)
-    (mapcar #'cadr lst)))
+    `(expl-block :indent ,indent
+		 :contents ,(mapcar (lambda (x)
+				      (case (car x)
+					(expl-block x)
+					(t (cadr x))))
+				    lst))))
 
 (defrule explicit-blocks (+ explicit-indented-block))
 
-(defrule implicit-indented-block (wrap ""
-				       (* (and (! indent-spec-line)
-					       indented-line)))
-  (:wrap-around (let ((indent 0))
-		  (call-parser)))
-  (:lambda (lst)
-    (mapcar #'cadr lst)))
+;; (defrule implicit-indented-block (wrap ""
+;; 				       (* (and (! indent-spec-line)
+;; 					       indented-line)))
+;;   (:wrap-around (let ((indent 0))
+;; 		  (call-parser)))
+;;   (:lambda (lst)
+;;     (mapcar #'cadr lst)))
 
-(defrule implicit-blocks (+ implicit-indented-block))
+;; (defrule implicit-blocks (+ implicit-indented-block))
 
-(defrule indented-block (or explicit-indented-block
-			    implicit-indented-block))
+;; (defrule indented-block (or implicit-indented-block
+;; 			    explicit-indented-block))
 
-(defrule blocks (+ indented-block))
+;; (defrule blocks (* indented-block))
 
-(defrule multi-spaces (+ spaces))
+;; (defrule multi-spaces (+ spaces))
    
 		

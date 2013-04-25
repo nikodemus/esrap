@@ -31,6 +31,7 @@
 
 (defpackage :esrap
   (:use :cl :alexandria :defmacro-enhance :iterate)
+  (:shadowing-import-from :rutils.string :strcat)
   #+sbcl
   (:lock t)
   (:export
@@ -406,6 +407,10 @@ symbols."
 
 (defvar *nonterminal-stack* nil)
 
+(defun hash->assoc (hash)
+  (iter (for (key val) in-hashtable hash)
+	(collect `(,key . ,val))))
+
 ;;; SYMBOL, POSITION, and CACHE must all be lexical variables!
 (defmacro with-cached-result ((symbol position &optional (text nil)) &body forms)
   (with-gensyms (cache result)
@@ -598,6 +603,37 @@ Following OPTIONS can be specified:
 
     This option can be used to safely track nesting depth, manage symbol
     tables or for other stack-like operations.
+  * (:WRAP-AROUND &BODY BODY)
+
+    Another way to perform stack-like operations.
+    Shadows everything, that's specified in the :AROUND clause.
+    If used, it is assumed, that EXPRESSION is of the form (LIST 'WRAP WRAPPER WRAPPIE),
+    where WRAPPER and WRAPPIE are arbitrary expressions, not containing WRAP.
+    All this being the case, parsing of a rule proceeds as follows:
+       * first, WRAPPER is parsed.
+       * if that succeeds, BODY is executed, with WRAPPER bound to result of parsing
+         WRAPPER, and PARSER bound to thunk to parse WRAPPIE.
+         Additionally, CALL-PARSER is synonym to (FUNCALL PARSER),
+         just to mimick CALL-TRANSFORM of original :AROUND clause.
+
+    Typical use-case would be:
+
+        (defrule my-wrapping-rule (wrap wrapper wrappie)
+          (:wrap-around (let ((context-var-1 (car wrapper)) ; set dynamic state based on WRAPPER
+                              (context-var-2 (cadr wrapper)))
+                          (call-parser))) ; trigger further parsing
+          (:lambda (lst) ; LST here is result of parsing WRAPPIE
+             (list :context `(,context-var-1 ,context-var-2) ; yep, we are inside the context
+                   :content lst)))                           ; designated by the wrapper.
+
+    If that sounds a little bit confusing, see test-suite DYNAMIC-WRAPPING
+    in TESTS.LISP and EXAMPLE-VERY-CONTEXT-SENSITIVE.LISP for examples.
+    This feature was introduced to express rules for reading block-scalars in YaML,
+    hence, see www.yaml.org for the specification of block scalars and the idea of why
+    this feature is needed.
+
+    Since no parsing of a WRAPPIE is occured at the time BODY is executed, nothing sensible
+    can be bound to &BOUNDS.
 "
   (let ((transform nil)
         (around nil)
@@ -695,7 +731,6 @@ associated with a rule, the old rule is removed first."
                                  (rule-transform rule)
                                  (rule-around rule)))
          (function (lambda (text position end)
-                     (format t "parsing ~a ~a~%" symbol position)
 		     (funcall function text position end)))
          (trace-info (cell-trace-info cell)))
     (set-cell-info cell function rule)
@@ -869,112 +904,88 @@ inspection."
 
 (defun compile-rule (symbol expression condition transform around)
   (declare (type (or boolean function) condition transform around))
-  (let ((*current-rule* symbol))
-    ;; Must bind *CURRENT-RULE* before compiling the expression!
-    (if (and (consp expression)
-	     (symbolp (car expression))
-	     (equal (string (car expression)) "WRAP"))
-	(destructuring-bind (wrap wrapper wrappie) expression
-	  (declare (ignore wrap))
-	  (format t "Imhere!~%")
-	  (let* ((func-wrapper (compile-expression wrapper))
+  (macrolet ((cur-parse-failed (&optional (result-var 'result))
+	       `(make-failed-parse
+		 :expression symbol
+		 :position (if (failed-parse-p ,result-var)
+			       (failed-parse-position ,result-var)
+			       position)
+		 :detail ,result-var))
+	     (call-transform (&optional (result-var 'result))
+	       `(funcall transform
+			 (result-production ,result-var)
+			 position
+			 (result-position ,result-var)))
+	     (conditionally-exec (name &body body)
+	       `(if (eq t condition)
+		    (named-lambda ,name (text position end)
+		      (with-cached-result (symbol position text)
+			,@body))
+		    (named-lambda ,(intern (strcat "CONDITIONAL-" name)) (text position end)
+		     (with-cached-result (symbol position text)
+		       (if (funcall condition)
+			   (progn ,@body)
+			   rule-not-active)))))
+	     (make-result-evenly (result-var &optional (production '(call-transform)))
+	       `(make-result :position (result-position ,result-var)
+			     :production ,production)))
+    (let ((*current-rule* symbol))
+      ;; Must bind *CURRENT-RULE* before compiling the expression!
+      (if (and (consp expression)
+	       (symbolp (car expression))
+	       (equal (string (car expression)) "WRAP"))
+	  (destructuring-bind (wrap wrapper wrappie) expression
+	    (declare (ignore wrap))
+	    (let* ((func-wrapper (compile-expression wrapper))
+		   (rule-not-active (when condition (make-inactive-rule :name symbol))))
+	      (cond ((not condition)
+		     (named-lambda inactive-rule (text position end)
+		       (declare (ignore text position end))
+		       rule-not-active))
+		    ((not (and transform around))
+		     (error "When specifying WRAP rule both TRANSFORM and AROUND should be present."))
+		    (t (flet ((exec-rule/wrap (text position end)
+				(let ((wrapper-result (funcall func-wrapper text position end)))
+				  (if (error-result-p wrapper-result)
+				      (cur-parse-failed wrapper-result)
+				      (funcall around
+					       (result-production wrapper-result)
+					       (lambda ()
+						 (let* ((func-wrappie (compile-expression wrappie))
+							(wrappie-result (funcall func-wrappie text
+										 (result-position wrapper-result)
+										 end)))
+						   (if (error-result-p wrappie-result)
+						       (cur-parse-failed wrappie-result)
+						       (let ((production (call-transform wrappie-result)))
+							 (make-result-evenly wrappie-result
+									     (values production)))))))))))
+			 (conditionally-exec rule/wrap
+			   (exec-rule/wrap text position end)))))))
+	  (let* ((function (compile-expression expression))
 		 (rule-not-active (when condition (make-inactive-rule :name symbol))))
 	    (cond ((not condition)
 		   (named-lambda inactive-rule (text position end)
 		     (declare (ignore text position end))
 		     rule-not-active))
-		  ((not (and transform around))
-		   (error "When specifying WRAP rule both TRANSFORM and AROUND should be present."))
-		  (t (flet ((exec-rule/transform (text position end)
-			      (let ((wrapper-result (funcall func-wrapper text position end)))
-				(if (error-result-p wrapper-result)
-				    (make-failed-parse
-				     :expression symbol
-				     :position (if (failed-parse-p wrapper-result)
-						   (failed-parse-position wrapper-result)
-						   position)
-				     :detail wrapper-result)
-				    (funcall around
-					     (result-production wrapper-result)
-					     (lambda ()
-					       (let* ((func-wrappie (compile-expression wrappie))
-						      (wrappie-result (funcall func-wrappie text
-									       (result-position wrapper-result)
-									       end)))
-						 (if (error-result-p wrappie-result)
-						     (make-failed-parse
-						      :expression symbol
-						      :position (if (failed-parse-p wrappie-result)
-								    (failed-parse-position wrappie-result)
-								    position)
-						      :detail wrappie-result)
-						     (let ((production (funcall transform
-									   (result-production wrappie-result)
-									   position
-									   (result-position wrappie-result))))
-						       (make-result
-							:position (result-position wrappie-result)
-							:production (values production)))))))))))
-		       (if (eq t condition)
-			   (named-lambda rule/transform (text position end)
-			     (with-cached-result (symbol position text)
-			       (exec-rule/transform text position end)))
-			   (named-lambda condition-rule/transform (text position end)
-			     (with-cached-result (symbol position text)
-			       (if (funcall condition)
-				   (exec-rule/transform text position end)
-				   rule-not-active)))))))))
-	(let* ((function (compile-expression expression))
-	       (rule-not-active (when condition (make-inactive-rule :name symbol))))
-	  (format t "Im there!~%")
-	  (cond ((not condition)
-		 (named-lambda inactive-rule (text position end)
-		   (declare (ignore text position end))
-		   rule-not-active))
-		(transform
-		 (flet ((exec-rule/transform (text position end)
-			  (let ((result (funcall function text position end)))
-			    (if (error-result-p result)
-				(make-failed-parse
-				 :expression symbol
-				 :position (if (failed-parse-p result)
-					       (failed-parse-position result)
-					       position)
-				 :detail result)
-				(if around
-				    (make-result
-				     :position (result-position result)
-				     :production (flet ((call-rule ()
-							  (funcall transform
-								   (result-production result)
-								   position
-								   (result-position result))))
-						   (funcall around position (result-position result) #'call-rule)))
-				    (make-result
-				     :position (result-position result)
-				     :production (funcall transform
-							  (result-production result)
-							  position
-							  (result-position result))))))))
-		   (if (eq t condition)
-		       (named-lambda rule/transform (text position end)
-			 (with-cached-result (symbol position text)
-			   (exec-rule/transform text position end)))
-		       (named-lambda condition-rule/transform (text position end)
-			 (with-cached-result (symbol position text)
-			   (if (funcall condition)
-			       (exec-rule/transform text position end)
-			       rule-not-active))))))
-		(t
-		 (if (eq t condition)
-		     (named-lambda rule (text position end)
-		       (with-cached-result (symbol position text)
-			 (funcall function text position end)))
-		     (named-lambda conditional-rule (text position end)
-		       (with-cached-result (symbol position text)
-			 (if (funcall condition)
-			     (funcall function text position end)
-			     rule-not-active))))))))))
+		  (transform
+		   (flet ((exec-rule/transform (text position end)
+			    (let ((result (funcall function text position end)))
+			      (if (error-result-p result)
+				  (cur-parse-failed)
+				  (if around
+				      (make-result-evenly result
+							  (flet ((call-rule ()
+								   (call-transform)))
+							    (funcall around
+								     position
+								     (result-position result)
+								     #'call-rule)))
+				      (make-result-evenly result))))))
+		     (conditionally-exec rule/transform
+		       (exec-rule/transform text position end))))
+		  (t (conditionally-exec rule
+		       (funcall function text position end)))))))))
 
 ;;; EXPRESSION COMPILER & EVALUATOR
 
@@ -1002,7 +1013,6 @@ inspection."
         (cons
          (case (car expression)
            ((and or wrap)
-	    ;; (format t "Imhere!")
             (and (every #'validate-expression (cdr expression)) t))
            ((nil)
             nil)
