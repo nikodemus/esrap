@@ -30,14 +30,14 @@
 ;;;;  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 (defpackage :esrap
-  (:use :cl :alexandria)
+  (:use :cl :alexandria :defmacro-enhance :iterate)
   #+sbcl
   (:lock t)
   (:export
    #:&bounds
 
    #:! #:? #:+ #:* #:& #:~
-   #:character-ranges
+   #:character-ranges #:wrap
 
    #:add-rule
    #:call-transform
@@ -533,7 +533,7 @@ are allowed only if JUNK-ALLOWED is true."
                       position
                       (simple-esrap-error text position "Incomplete parse.")))))))
 
-(defmacro defrule (&whole form symbol expression &body options)
+(defmacro! defrule (&whole form symbol expression &body options)
   "Define SYMBOL as a nonterminal, using EXPRESSION as associated the parsing expression.
 
 Following OPTIONS can be specified:
@@ -664,7 +664,13 @@ Following OPTIONS can be specified:
                                         (function transform))
                                (flet ((call-transform ()
                                         (funcall transform)))
-                                 ,@forms)))))))))
+                                 ,@forms)))))
+	    ((:wrap-around &body forms)
+	     (setf around `(lambda (,e!-wrapper ,e!-parser) ; should change to g!-syms here
+			     (declare (ignorable ,e!-wrapper ,e!-parser))
+			     (flet ((,e!-call-parser ()
+				      (funcall ,e!-parser)))
+			       ,@forms))))))))
     `(eval-when (:load-toplevel :execute)
        (add-rule ',symbol (make-instance 'rule
                                          :expression ',expression
@@ -683,11 +689,14 @@ associated with a rule, the old rule is removed first."
     (error "~S is already associated with the nonterminal ~S -- remove it first."
            rule (rule-symbol rule)))
   (let* ((cell (ensure-rule-cell symbol))
-         (function (compile-rule symbol
+	 (function (compile-rule symbol
                                  (rule-expression rule)
                                  (rule-condition rule)
                                  (rule-transform rule)
                                  (rule-around rule)))
+         (function (lambda (text position end)
+                     (format t "parsing ~a ~a~%" symbol position)
+		     (funcall function text position end)))
          (trace-info (cell-trace-info cell)))
     (set-cell-info cell function rule)
     (setf (cell-trace-info cell) nil)
@@ -860,58 +869,112 @@ inspection."
 
 (defun compile-rule (symbol expression condition transform around)
   (declare (type (or boolean function) condition transform around))
-  (let* ((*current-rule* symbol)
-         ;; Must bind *CURRENT-RULE* before compiling the expression!
-         (function (compile-expression expression))
-         (rule-not-active (when condition (make-inactive-rule :name symbol))))
-    (cond ((not condition)
-           (named-lambda inactive-rule (text position end)
-             (declare (ignore text position end))
-             rule-not-active))
-          (transform
-           (flet ((exec-rule/transform (text position end)
-                    (let ((result (funcall function text position end)))
-                      (if (error-result-p result)
-                          (make-failed-parse
-                           :expression symbol
-                           :position (if (failed-parse-p result)
-                                         (failed-parse-position result)
-                                         position)
-                           :detail result)
-                          (if around
-                              (make-result
-                               :position (result-position result)
-                               :production (flet ((call-rule ()
-                                                    (funcall transform
-                                                             (result-production result)
-                                                             position
-                                                             (result-position result))))
-                                             (funcall around position (result-position result) #'call-rule)))
-                              (make-result
-                               :position (result-position result)
-                               :production (funcall transform
-                                                    (result-production result)
-                                                    position
-                                                    (result-position result))))))))
-             (if (eq t condition)
-                 (named-lambda rule/transform (text position end)
-                   (with-cached-result (symbol position text)
-                     (exec-rule/transform text position end)))
-                 (named-lambda condition-rule/transform (text position end)
-                   (with-cached-result (symbol position text)
-                     (if (funcall condition)
-                         (exec-rule/transform text position end)
-                         rule-not-active))))))
-          (t
-           (if (eq t condition)
-               (named-lambda rule (text position end)
-                 (with-cached-result (symbol position text)
-                   (funcall function text position end)))
-               (named-lambda conditional-rule (text position end)
-                 (with-cached-result (symbol position text)
-                   (if (funcall condition)
-                       (funcall function text position end)
-                       rule-not-active))))))))
+  (let ((*current-rule* symbol))
+    ;; Must bind *CURRENT-RULE* before compiling the expression!
+    (if (and (consp expression)
+	     (symbolp (car expression))
+	     (equal (string (car expression)) "WRAP"))
+	(destructuring-bind (wrap wrapper wrappie) expression
+	  (declare (ignore wrap))
+	  (format t "Imhere!~%")
+	  (let* ((func-wrapper (compile-expression wrapper))
+		 (rule-not-active (when condition (make-inactive-rule :name symbol))))
+	    (cond ((not condition)
+		   (named-lambda inactive-rule (text position end)
+		     (declare (ignore text position end))
+		     rule-not-active))
+		  ((not (and transform around))
+		   (error "When specifying WRAP rule both TRANSFORM and AROUND should be present."))
+		  (t (flet ((exec-rule/transform (text position end)
+			      (let ((wrapper-result (funcall func-wrapper text position end)))
+				(if (error-result-p wrapper-result)
+				    (make-failed-parse
+				     :expression symbol
+				     :position (if (failed-parse-p wrapper-result)
+						   (failed-parse-position wrapper-result)
+						   position)
+				     :detail wrapper-result)
+				    (funcall around
+					     (result-production wrapper-result)
+					     (lambda ()
+					       (let* ((func-wrappie (compile-expression wrappie))
+						      (wrappie-result (funcall func-wrappie text
+									       (result-position wrapper-result)
+									       end)))
+						 (if (error-result-p wrappie-result)
+						     (make-failed-parse
+						      :expression symbol
+						      :position (if (failed-parse-p wrappie-result)
+								    (failed-parse-position wrappie-result)
+								    position)
+						      :detail wrappie-result)
+						     (let ((production (funcall transform
+									   (result-production wrappie-result)
+									   position
+									   (result-position wrappie-result))))
+						       (make-result
+							:position (result-position wrappie-result)
+							:production (values production)))))))))))
+		       (if (eq t condition)
+			   (named-lambda rule/transform (text position end)
+			     (with-cached-result (symbol position text)
+			       (exec-rule/transform text position end)))
+			   (named-lambda condition-rule/transform (text position end)
+			     (with-cached-result (symbol position text)
+			       (if (funcall condition)
+				   (exec-rule/transform text position end)
+				   rule-not-active)))))))))
+	(let* ((function (compile-expression expression))
+	       (rule-not-active (when condition (make-inactive-rule :name symbol))))
+	  (format t "Im there!~%")
+	  (cond ((not condition)
+		 (named-lambda inactive-rule (text position end)
+		   (declare (ignore text position end))
+		   rule-not-active))
+		(transform
+		 (flet ((exec-rule/transform (text position end)
+			  (let ((result (funcall function text position end)))
+			    (if (error-result-p result)
+				(make-failed-parse
+				 :expression symbol
+				 :position (if (failed-parse-p result)
+					       (failed-parse-position result)
+					       position)
+				 :detail result)
+				(if around
+				    (make-result
+				     :position (result-position result)
+				     :production (flet ((call-rule ()
+							  (funcall transform
+								   (result-production result)
+								   position
+								   (result-position result))))
+						   (funcall around position (result-position result) #'call-rule)))
+				    (make-result
+				     :position (result-position result)
+				     :production (funcall transform
+							  (result-production result)
+							  position
+							  (result-position result))))))))
+		   (if (eq t condition)
+		       (named-lambda rule/transform (text position end)
+			 (with-cached-result (symbol position text)
+			   (exec-rule/transform text position end)))
+		       (named-lambda condition-rule/transform (text position end)
+			 (with-cached-result (symbol position text)
+			   (if (funcall condition)
+			       (exec-rule/transform text position end)
+			       rule-not-active))))))
+		(t
+		 (if (eq t condition)
+		     (named-lambda rule (text position end)
+		       (with-cached-result (symbol position text)
+			 (funcall function text position end)))
+		     (named-lambda conditional-rule (text position end)
+		       (with-cached-result (symbol position text)
+			 (if (funcall condition)
+			     (funcall function text position end)
+			     rule-not-active))))))))))
 
 ;;; EXPRESSION COMPILER & EVALUATOR
 
@@ -938,7 +1001,8 @@ inspection."
          t)
         (cons
          (case (car expression)
-           ((and or)
+           ((and or wrap)
+	    ;; (format t "Imhere!")
             (and (every #'validate-expression (cdr expression)) t))
            ((nil)
             nil)
@@ -1336,10 +1400,12 @@ inspection."
     (let ((function (compile-expression subexpr)))
       (named-lambda compiled-greedy-repetition (text position end)
         (let ((results
-               (loop for result = (funcall function text position end)
-                     until (error-result-p result)
-                     do (setf position (result-position result))
-                     collect result)))
+               (iter (for result next (funcall function text position end))
+		     (until (or (error-result-p result)
+				(if-first-time nil
+					       (equal (result-position result) position))))
+                     (setf position (result-position result))
+                     (collect result))))
           (make-result
            :position position
            :production (mapcar #'result-production results)))))))
@@ -1356,10 +1422,12 @@ inspection."
       (named-lambda compiled-greedy-positive-repetition (text position end)
         (let* ((last nil)
                (results
-                (loop for result = (funcall function text position end)
-                     until (error-result-p (setf last result))
-                     do (setf position (result-position result))
-                     collect result)))
+                (iter (for result next (funcall function text position end))
+		      (until (or (error-result-p (setf last result))
+				 (if-first-time nil
+						(equal (result-position result) position))))
+		      (setf position (result-position result))
+		      (collect result))))
           (if results
               (make-result
                :position position
