@@ -1023,6 +1023,10 @@ inspection."
             (and (every #'validate-character-range (cdr expression)) t))
 	   (* (and (>= (length expression) 2)
 		   (validate-expression (car (last expression)))))
+	   (cond (and (every (lambda (x)
+			       (and (every #'validate-expression x) t))
+			     (cdr expression))
+		      t))
            (t
             (and (symbolp (car expression))
                  (cdr expression) (not (cddr expression))
@@ -1094,7 +1098,7 @@ inspection."
        (and
         (eval-sequence expression text position end))
        (or
-        (eval-ordered-choise expression text position end))
+        (eval-ordered-choice expression text position end))
        (not
         (eval-negation expression text position end))
        (* (cond ((equal (length expression) 2) (eval-greedy-repetition expression))
@@ -1109,6 +1113,8 @@ inspection."
         (eval-not-followed-by expression text position end))
        (character-ranges
         (eval-character-ranges expression text position end))
+       (cond
+	 (eval-cond expression text position end))
        (t
         (if (symbolp (car expression))
 	    (eval-semantic-predicate expression text position end)
@@ -1133,7 +1139,7 @@ inspection."
        (and
         (compile-sequence expression))
        (or
-        (compile-ordered-choise expression))
+        (compile-ordered-choice expression))
        (not
         (compile-negation expression))
        (* (cond ((equal (length expression) 2) (compile-greedy-repetition expression))
@@ -1148,6 +1154,8 @@ inspection."
         (compile-not-followed-by expression))
        (character-ranges
         (compile-character-ranges expression))
+       (cond
+	 (compile-cond expression))
        (t
         (if (symbolp (car expression))
 	    (compile-semantic-predicate expression)
@@ -1271,9 +1279,9 @@ inspection."
                     (setf position (result-position result)))
                 (push result results))))))))
 
-;;; Ordered choises
+;;; Ordered choices
 
-(defun eval-ordered-choise (expression text position end)
+(defun eval-ordered-choice (expression text position end)
   (with-expression (expression (or &rest subexprs))
     (let (last-error)
       (dolist (expr subexprs
@@ -1296,7 +1304,7 @@ inspection."
                 (setf last-error result))
               (return result)))))))
 
-(defun compile-ordered-choise (expression)
+(defun compile-ordered-choice (expression)
   (with-expression (expression (or &rest subexprs))
     (let ((type :characters)
           (canonized nil))
@@ -1327,10 +1335,10 @@ inspection."
       (ecase type
         (:characters
          ;; If every subexpression is a length 1 string, we can represent the whole
-         ;; choise with a single string.
-         (let ((choises (apply #'concatenate 'string canonized)))
-           (named-lambda compiled-character-choise (text position end)
-             (let ((c (and (< position end) (find (char text position) choises))))
+         ;; choice with a single string.
+         (let ((choices (apply #'concatenate 'string canonized)))
+           (named-lambda compiled-character-choice (text position end)
+             (let ((c (and (< position end) (find (char text position) choices))))
                (if c
                    (make-result :position (+ 1 position)
                                 :production (string c))
@@ -1338,23 +1346,23 @@ inspection."
                     :expression expression
                     :position position))))))
         (:strings
-         ;; If every subexpression is a string, we can represent the whole choise
+         ;; If every subexpression is a string, we can represent the whole choice
          ;; with a list of strings.
-         (let ((choises (nreverse canonized)))
-           (named-lambda compiled-character-choise (text position end)
-             (dolist (choise choises
+         (let ((choices (nreverse canonized)))
+           (named-lambda compiled-character-choice (text position end)
+             (dolist (choice choices
                       (make-failed-parse
                        :expression expression
                        :position position))
-               (let ((len (length choise)))
-                 (when (match-terminal-p choise len text position end t)
+               (let ((len (length choice)))
+                 (when (match-terminal-p choice len text position end t)
                    (return
                      (make-result :position (+ len position)
-                                  :production choise))))))))
+                                  :production choice))))))))
         (:general
          ;; In the general case, compile subexpressions and call.
          (let ((functions (mapcar #'compile-expression subexprs)))
-             (named-lambda compiled-ordered-choise (text position end)
+             (named-lambda compiled-ordered-choice (text position end)
                (let (last-error)
                  (dolist (fun functions
                           (make-failed-parse
@@ -1620,6 +1628,55 @@ inspection."
   (with-expression (expression (character-ranges &rest ranges))
     (named-lambda compiled-character-ranges (text position end)
       (exec-character-ranges expression ranges text position end))))
+
+(defun eval-cond (expression text position end)
+  (funcall (compile-cond expression)
+           text position end))
+
+(defun compile-cond (expression)
+  (with-expression (expression (cond &rest subexprs))
+    (let ((functions (iter (for subexp in subexprs)
+			   (collect `(,(if (and (symbolp (car subexp))
+						(or (eql (car subexp) 't)
+						    (eql (car subexp) 'otherwise)))
+					   (lambda (text start end)
+					     (declare (ignore text end))
+					     (make-result :position start
+							  :production (lambda () t)))
+					   (compile-expression (car subexp)))
+				       ,(compile-expression (cadr subexp)))))))
+      (named-lambda compiled-cond (text position end)
+	(let (pred-result result last-error)
+	  (macrolet ((mark-result-as-last-error (&optional (result-var 'result))
+		       `(when (or (and (not last-error)
+				       (or (inactive-rule-p ,result-var)
+					   (< position (failed-parse-position ,result-var))))
+				  (and last-error
+				       (failed-parse-p ,result-var)
+				       (or (inactive-rule-p last-error)
+					   (< (failed-parse-position last-error)
+					      (failed-parse-position ,result-var)))))
+			  (setf last-error ,result-var))))
+	    (iter (for (predicate value-function) in functions)
+		  (setf pred-result (funcall predicate text position end))
+		  (if (error-result-p pred-result)
+		      (mark-result-as-last-error pred-result)
+		      (progn (setf result (funcall value-function text
+						   (result-position pred-result) end))
+			     (if (error-result-p result)
+				 (mark-result-as-last-error)
+				 (terminate))))
+		  (finally (return (if (and result (not (error-result-p result)))
+				       result
+				       (make-failed-parse
+					:expression expression
+					:position (if (and last-error
+							   (failed-parse-p last-error))
+						      (failed-parse-position last-error)
+						      position)
+					:detail last-error)))))))))))
+
+			  
 
 (defvar *indentation-hint-table* nil)
 

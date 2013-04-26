@@ -337,6 +337,23 @@
   (is (equal '("aaaa" "aaaa") (let ((dyna-to 4))
 				(parse 'dyna-from-tos "aaaaaaaa")))))
 
+(defrule cond-word (cond (dyna-from-to word)))
+
+(defparameter context nil)
+(defun in-context-p (x)
+  (declare (ignore x))
+  context)
+(defrule context (in-context-p ""))
+(defrule ooc-word word
+  (:constant "out of context word"))
+(test cond
+  (is (equal "foo" (parse 'cond-word "aaaafoo")))
+  (is (equal "foo" (let ((context t)) (parse '(cond (context word)) "foo"))))
+  (is (equal :error-occured (handler-case (parse '(cond (context word)) "foo")
+			      (error () :error-occured))))
+  (is (equal "out of context word" (parse '(cond (context word) (t ooc-word))
+					  "foo"))))
+
 (defun run-tests ()
   (let ((results (run 'esrap)))
     (eos:explain! results)
