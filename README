@@ -53,6 +53,8 @@ Syntax overview:
  (+ greedy-positive-repetition)
  (? optional)
  (& followed-by)           -- does not consume
+ (-> followed-by-not-gen)  -- does not consume, produces NIL
+ (<- preceded-by-not-gen)  -- succeeds, if preceeded by something of length 1, produces NIL
  (! not-followed-by)       -- does not consume
  (<predicate> expr)        -- semantic parsing
 

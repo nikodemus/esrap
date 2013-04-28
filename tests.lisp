@@ -341,7 +341,7 @@
 
 (defun in-context-p (x)
   (declare (ignore x))
-  context)
+  (and context (not (eql context :void))))
 (defrule context (in-context-p ""))
 (defrule ooc-word word
   (:constant "out of context word"))
@@ -352,6 +352,12 @@
 			      (error () :error-occured))))
   (is (equal "out of context word" (parse '(cond (context word) (t ooc-word))
 					  "foo"))))
+
+(test followed-by-not-gen
+  (is (equal '("a" nil "b") (parse '(and "a" (-> "b") "b") "ab"))))
+
+(test preceded-by-not-gen
+  (is (equal '("a" nil "b") (parse '(and "a" (<- "a") "b") "ab"))))
 
 (defun run-tests ()
   (let ((results (run 'esrap)))
