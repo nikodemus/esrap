@@ -56,10 +56,15 @@ Syntax overview:
  (-> followed-by-not-gen)  -- does not consume, produces NIL
  (<- preceded-by-not-gen)  -- succeeds, if preceeded by something of length 1, produces NIL
  (! not-followed-by)       -- does not consume
+ (cond &rest clauses)      -- very analogous to CL's cond statement
+ (first expr)              -- results in CAR of EXPR, if EXPR parses successfully
  (<predicate> expr)        -- semantic parsing
 
  FROM and TO in (* ...) form may be arbitrary forms (e.g. special variables), but use with caution -
  feature is experimental and probably does not handle local environment correctly.
+
+ Each clause in COND form is of the form (PREDICATE-SUBEXPR VALUE-SUBEXPR). Clauses are executed in order.
+ First clause, for which PREDICATE-SUBEXPR succeeds and VALUE-SUBEXPR also succeeds, leads VALUE-SUBEXPR.
 
  See file example-sexp.lisp for a complete sample grammar and usage,
  example-symbol-table.lisp for a grammar with lexical scope,
