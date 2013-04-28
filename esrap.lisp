@@ -37,6 +37,7 @@
   (:export
    #:&bounds
 
+   #:context
    #:! #:? #:+ #:* #:& #:~
    #:character-ranges #:wrap
 
@@ -67,6 +68,8 @@
 (in-package :esrap)
 
 ;;; Conditions
+
+(defun foo () nil)
 
 (define-condition esrap-error (parse-error)
   ((text :initarg :text :initform nil :reader esrap-error-text)
@@ -394,16 +397,20 @@ symbols."
 ;;; For now we just use EQUAL hash-tables, but a specialized
 ;;; representation would probably pay off.
 
+(defparameter context :void "Context, which is active, when the rule is trying to parse.
+Cache depends not only on rule-name and position, but also on the context assumed while
+parsing.")
+
 (defvar *cache*)
 
 (defun make-cache ()
   (make-hash-table :test #'equal))
 
 (defun get-cached (symbol position cache)
-  (gethash (cons symbol position) cache))
+  (gethash (list symbol position context) cache))
 
 (defun (setf get-cached) (result symbol position cache)
-  (setf (gethash (cons symbol position) cache) result))
+  (setf (gethash (list symbol position context) cache) result))
 
 (defvar *nonterminal-stack* nil)
 
