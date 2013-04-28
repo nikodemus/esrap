@@ -1126,6 +1126,8 @@ inspection."
         (eval-character-ranges expression text position end))
        (cond
 	 (eval-cond expression text position end))
+       (first
+	(eval-first expression text position end))
        (t
         (if (symbolp (car expression))
 	    (eval-semantic-predicate expression text position end)
@@ -1171,6 +1173,8 @@ inspection."
         (compile-character-ranges expression))
        (cond
 	 (compile-cond expression))
+       (first
+	(compile-first expression))
        (t
         (if (symbolp (car expression))
 	    (compile-semantic-predicate expression)
@@ -1402,8 +1406,6 @@ inspection."
 
 ;;; Negations
 
-
-
 (defun exec-negation (fun expr text position end)
   (if (and (< position end)
            (error-result-p (funcall fun text position end)))
@@ -1459,7 +1461,7 @@ inspection."
 	     (named-lambda compiled-times (text position end)
 	       (let* ((last nil)
 		      (results
-		       (iter (for i from 1 to ,to)
+		       (iter ,@(if to `((for i from 1 to ,to)))
 			     (for result next (funcall function text position end))
 			     (until (or (error-result-p (setf last result))
 					(if-first-time nil
@@ -1744,6 +1746,20 @@ inspection."
 						      position)
 					:detail last-error)))))))))))
 
+(defun eval-first (expression text position end)
+  (funcall (compile-first expression)
+           text position end))
+
+(defun compile-first (expression)
+  (with-expression (expression (first subexpr))
+    (let ((function (compile-expression subexpr)))
+      (named-lambda compiled-first (text position end)
+        (let ((result (funcall function text position end)))
+          (if (error-result-p result)
+	      result
+              (make-result
+               :position (result-position result)
+               :production (car (result-production result)))))))))
 			  
 
 (defvar *indentation-hint-table* nil)
