@@ -339,7 +339,6 @@
 
 (defrule cond-word (cond (dyna-from-to word)))
 
-(defparameter context nil)
 (defun in-context-p (x)
   (declare (ignore x))
   context)

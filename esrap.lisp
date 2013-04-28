@@ -37,6 +37,7 @@
   (:export
    #:&bounds
 
+   #:context
    #:! #:? #:+ #:* #:& #:~
    #:character-ranges #:wrap
 
@@ -67,6 +68,8 @@
 (in-package :esrap)
 
 ;;; Conditions
+
+(defun foo () nil)
 
 (define-condition esrap-error (parse-error)
   ((text :initarg :text :initform nil :reader esrap-error-text)
@@ -394,16 +397,20 @@ symbols."
 ;;; For now we just use EQUAL hash-tables, but a specialized
 ;;; representation would probably pay off.
 
+(defparameter context :void "Context, which is active, when the rule is trying to parse.
+Cache depends not only on rule-name and position, but also on the context assumed while
+parsing.")
+
 (defvar *cache*)
 
 (defun make-cache ()
   (make-hash-table :test #'equal))
 
 (defun get-cached (symbol position cache)
-  (gethash (cons symbol position) cache))
+  (gethash (list symbol position context) cache))
 
 (defun (setf get-cached) (result symbol position cache)
-  (setf (gethash (cons symbol position) cache) result))
+  (setf (gethash (list symbol position context) cache) result))
 
 (defvar *nonterminal-stack* nil)
 
@@ -494,24 +501,24 @@ are allowed only if JUNK-ALLOWED is true."
      end
      junk-allowed)))
 
-(define-compiler-macro parse (&whole form expression &rest arguments
-                              &environment env)
-  (if (constantp expression env)
-      (with-gensyms (expr-fun)
-        `(let ((,expr-fun (load-time-value (compile-expression ,expression))))
-           ;; This inline-lambda here provides keyword defaults and
-           ;; parsing, so the compiler-macro doesn't have to worry
-           ;; about evaluation order.
-           ((lambda (text &key (start 0) end junk-allowed)
-              (let ((*cache* (make-cache))
-                    (end (or end (length text))))
-                (process-parse-result
-                 (funcall ,expr-fun text start end)
-                 text
-                 end
-                 junk-allowed)))
-            ,@arguments)))
-      form))
+;; (define-compiler-macro parse (&whole form expression &rest arguments
+;;                               &environment env)
+;;   (if (constantp expression env)
+;;       (with-gensyms (expr-fun)
+;;         `(let ((,expr-fun (load-time-value (compile-expression ,expression))))
+;;            ;; This inline-lambda here provides keyword defaults and
+;;            ;; parsing, so the compiler-macro doesn't have to worry
+;;            ;; about evaluation order.
+;;            ((lambda (text &key (start 0) end junk-allowed)
+;;               (let ((*cache* (make-cache))
+;;                     (end (or end (length text))))
+;;                 (process-parse-result
+;;                  (funcall ,expr-fun text start end)
+;;                  text
+;;                  end
+;;                  junk-allowed)))
+;;             ,@arguments)))
+;;       form))
 
 (defun process-parse-result (result text end junk-allowed)
   (if (error-result-p result)
