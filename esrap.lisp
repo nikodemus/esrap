@@ -494,24 +494,24 @@ are allowed only if JUNK-ALLOWED is true."
      end
      junk-allowed)))
 
-(define-compiler-macro parse (&whole form expression &rest arguments
-                              &environment env)
-  (if (constantp expression env)
-      (with-gensyms (expr-fun)
-        `(let ((,expr-fun (load-time-value (compile-expression ,expression))))
-           ;; This inline-lambda here provides keyword defaults and
-           ;; parsing, so the compiler-macro doesn't have to worry
-           ;; about evaluation order.
-           ((lambda (text &key (start 0) end junk-allowed)
-              (let ((*cache* (make-cache))
-                    (end (or end (length text))))
-                (process-parse-result
-                 (funcall ,expr-fun text start end)
-                 text
-                 end
-                 junk-allowed)))
-            ,@arguments)))
-      form))
+;; (define-compiler-macro parse (&whole form expression &rest arguments
+;;                               &environment env)
+;;   (if (constantp expression env)
+;;       (with-gensyms (expr-fun)
+;;         `(let ((,expr-fun (load-time-value (compile-expression ,expression))))
+;;            ;; This inline-lambda here provides keyword defaults and
+;;            ;; parsing, so the compiler-macro doesn't have to worry
+;;            ;; about evaluation order.
+;;            ((lambda (text &key (start 0) end junk-allowed)
+;;               (let ((*cache* (make-cache))
+;;                     (end (or end (length text))))
+;;                 (process-parse-result
+;;                  (funcall ,expr-fun text start end)
+;;                  text
+;;                  end
+;;                  junk-allowed)))
+;;             ,@arguments)))
+;;       form))
 
 (defun process-parse-result (result text end junk-allowed)
   (if (error-result-p result)
