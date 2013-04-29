@@ -37,11 +37,11 @@
   (:export
    #:&bounds
 
-   #:context
    #:! #:? #:+ #:* #:& #:~ #:<- #:->
    #:character-ranges #:wrap
 
    #:add-rule
+   #:register-context
    #:call-transform
    #:change-rule
    #:concat
@@ -397,9 +397,9 @@ symbols."
 ;;; For now we just use EQUAL hash-tables, but a specialized
 ;;; representation would probably pay off.
 
-(defparameter context :void "Context, which is active, when the rule is trying to parse.
-Cache depends not only on rule-name and position, but also on the context assumed while
-parsing.")
+(defparameter contexts nil)
+(defmacro register-context (context-sym)
+  `(push ',context-sym contexts))
 
 (defvar *cache*)
 
@@ -407,10 +407,10 @@ parsing.")
   (make-hash-table :test #'equal))
 
 (defun get-cached (symbol position cache)
-  (gethash (list symbol position context) cache))
+  (gethash `(,symbol ,position ,@(mapcar #'symbol-value contexts)) cache))
 
 (defun (setf get-cached) (result symbol position cache)
-  (setf (gethash (list symbol position context) cache) result))
+  (setf (gethash `(,symbol ,position ,@(mapcar #'symbol-value contexts)) cache) result))
 
 (defvar *nonterminal-stack* nil)
 
