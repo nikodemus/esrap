@@ -1457,25 +1457,26 @@ inspection."
       (if (equal (length expression) 3)
 	  `(0 ,@(cdr expression))
 	  (cdr expression))
-    (eval `(let ((function (compile-expression ',subexpr)))
-	     (named-lambda compiled-times (text position end)
-	       (let* ((last nil)
-		      (results
-		       (iter ,@(if to `((for i from 1 to ,to)))
-			     (for result next (funcall function text position end))
-			     (until (or (error-result-p (setf last result))
-					(if-first-time nil
-						       (equal (result-position result) position))))
-			     (setf position (result-position result))
-			     (collect result))))
-		 (if (>= (length results) ,from)
-		     (make-result
-		      :position position
-		      :production (mapcar #'result-production results))
-		     (make-failed-parse
-		      :position position
-		      :expression ',expression
-		      :detail last))))))))
+    (let ((evallee `(let ((function (compile-expression ',subexpr)))
+		      (named-lambda compiled-times (text position end)
+			(let* ((last nil)
+			       (results
+				(iter ,@(if to `((for i from 1 to ,to)))
+				      (for result next (funcall function text position end))
+				      (until (or (error-result-p (setf last result))
+						 (if-first-time nil
+								(equal (result-position result) position))))
+				      (setf position (result-position result))
+				      (collect result))))
+			  (if (>= (length results) ,from)
+			      (make-result
+			       :position position
+			       :production (mapcar #'result-production results))
+			      (make-failed-parse
+			       :position position
+			       :expression ',expression
+			       :detail last)))))))
+      (eval evallee))))
 
 
 ;;; Greedy positive repetitions
