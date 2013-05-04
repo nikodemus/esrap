@@ -58,6 +58,7 @@ Syntax overview:
  (! not-followed-by)       -- does not consume
  (cond &rest clauses)      -- very analogous to CL's cond statement
  (first expr)              -- results in CAR of EXPR, if EXPR parses successfully
+ (tag tag-kwd expr)        -- on the fly tagging of expression
  (<predicate> expr)        -- semantic parsing
 
  FROM and TO in (* ...) form may be arbitrary forms (e.g. special variables), but use with caution -
@@ -65,11 +66,20 @@ Syntax overview:
 
  Each clause in COND form is of the form (PREDICATE-SUBEXPR VALUE-SUBEXPR). Clauses are executed in order.
  First clause, for which PREDICATE-SUBEXPR succeeds and VALUE-SUBEXPR also succeeds, leads VALUE-SUBEXPR.
+ Tag-clause succeeds, whenever EXPR succeeds, and leads `(,TAG-KWD ,EXPR). It is useful to track, which
+ alternative of the ordered choice, indeed, realized, like that:
+
+ (or (tag :simple simple-string)
+     (tag :complex complex-string))
+
+ without the need of introduction two additional named rules TAGGED-SIMPLE-STRING and TAGGED-COMPLEX-STRING.
 
  See file example-sexp.lisp for a complete sample grammar and usage,
  example-symbol-table.lisp for a grammar with lexical scope,
  example-very-context-sensitive.lisp for more complex example of context-sensitive grammar,
  and tests.lisp for various rather trivial use-cases.
+ Also, package CL-YACLYAML uses all advanced facilities of this parser-generator extensively - so, see code there for
+ real-life examples.
 
 Trivial examples:
 

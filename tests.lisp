@@ -339,6 +339,8 @@
 
 (defrule cond-word (cond (dyna-from-to word)))
 
+(defparameter context :void)
+
 (defun in-context-p (x)
   (declare (ignore x))
   (and context (not (eql context :void))))
@@ -358,6 +360,9 @@
 
 (test preceded-by-not-gen
   (is (equal '("a" nil "b") (parse '(and "a" (<- "a") "b") "ab"))))
+
+(test on-the-fly-tagging
+  (is (equal '(:simple-tag "aaa") (parse '(tag :simple-tag "aaa") "aaa"))))
 
 (defun run-tests ()
   (let ((results (run 'esrap)))

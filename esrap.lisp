@@ -38,7 +38,7 @@
    #:&bounds
 
    #:! #:? #:+ #:* #:& #:~ #:<- #:->
-   #:character-ranges #:wrap
+   #:character-ranges #:wrap #:tag
 
    #:add-rule
    #:register-context
@@ -1034,6 +1034,9 @@ inspection."
 			       (and (every #'validate-expression x) t))
 			     (cdr expression))
 		      t))
+	   (tag (and (equal (length expression) 3)
+		     (keywordp (cadr expression))
+		     (validate-expression (caddr expression))))
            (t
             (and (symbolp (car expression))
                  (cdr expression) (not (cddr expression))
@@ -1089,98 +1092,66 @@ inspection."
         (%expression-direct-dependencies (second expression) seen))))))
 
 (defun eval-expression (expression text position end)
-  (typecase expression
-    ((eql character)
-     (eval-character text position end))
-    (terminal
-     (if (consp expression)
-         (eval-terminal (string (second expression)) text position end nil)
-         (eval-terminal (string expression) text position end t)))
-    (nonterminal
-     (eval-nonterminal expression text position end))
-    (cons
-     (case (car expression)
-       (string
-        (eval-string expression text position end))
-       (and
-        (eval-sequence expression text position end))
-       (or
-        (eval-ordered-choice expression text position end))
-       (not
-        (eval-negation expression text position end))
-       (* (cond ((equal (length expression) 2) (eval-greedy-repetition expression text position end))
-		(t (eval-times expression text position end))))
-       (+
-        (eval-greedy-positive-repetition expression text position end))
-       (?
-        (eval-optional expression text position end))
-       (&
-        (eval-followed-by expression text position end))
-       (->
-        (eval-followed-by-not-gen expression text position end))
-       (<-
-        (eval-preceded-by-not-gen expression text position end))
-       (!
-        (eval-not-followed-by expression text position end))
-       (character-ranges
-        (eval-character-ranges expression text position end))
-       (cond
-	 (eval-cond expression text position end))
-       (first
-	(eval-first expression text position end))
-       (t
-        (if (symbolp (car expression))
-	    (eval-semantic-predicate expression text position end)
-            (invalid-expression-error expression)))))
-    (t
-     (invalid-expression-error expression))))
+  (macrolet ((frob ((&rest clauses) &body body)
+	       `(case (car expression)
+		  ,@(mapcar (lambda (clause)
+			      (let ((clause (if (atom clause) `(,clause) clause)))
+				`(,(car clause) (,(sb-int:symbolicate "EVAL-" (or (cadr clause) (car clause)))
+						  expression text position end))))
+			    clauses)
+		  ,@body)))
+    (typecase expression
+      ((eql character)
+       (eval-character text position end))
+      (terminal
+       (if (consp expression)
+	   (eval-terminal (string (second expression)) text position end nil)
+	   (eval-terminal (string expression) text position end t)))
+      (nonterminal
+       (eval-nonterminal expression text position end))
+      (cons
+       (frob (string (and sequence) (or ordered-choice) (not negation)
+		     (+ greedy-positive-repetition) (? optional) (& followed-by) (-> followed-by-not-gen)
+		     (<- preceded-by-not-gen) (! not-followed-by) character-ranges cond first tag)
+	     (* (cond ((equal (length expression) 2) (eval-greedy-repetition expression text position end))
+		      (t (eval-times expression text position end))))
+	     (t
+	      (if (symbolp (car expression))
+		  (eval-semantic-predicate expression text position end)
+		  (invalid-expression-error expression)))))
+      (t
+       (invalid-expression-error expression)))))
 
 (defun compile-expression (expression)
-  (etypecase expression
-    ((eql character)
-     (compile-character))
-    (terminal
-     (if (consp expression)
-         (compile-terminal (string (second expression)) nil)
-         (compile-terminal (string expression) t)))
-    (nonterminal
-     (compile-nonterminal expression))
-    (cons
-     (case (car expression)
-       (string
-        (compile-string expression))
-       (and
-        (compile-sequence expression))
-       (or
-        (compile-ordered-choice expression))
-       (not
-        (compile-negation expression))
-       (* (cond ((equal (length expression) 2) (compile-greedy-repetition expression))
-		(t (compile-times expression))))
-       (+
-        (compile-greedy-positive-repetition expression))
-       (?
-        (compile-optional expression))
-       (&
-        (compile-followed-by expression))
-       (->
-        (compile-followed-by-not-gen expression))
-       (<-
-        (compile-preceded-by-not-gen expression))
-       (!
-        (compile-not-followed-by expression))
-       (character-ranges
-        (compile-character-ranges expression))
-       (cond
-	 (compile-cond expression))
-       (first
-	(compile-first expression))
-       (t
-        (if (symbolp (car expression))
-	    (compile-semantic-predicate expression)
-            (invalid-expression-error expression)))))
-    (t
-     (invalid-expression-error expression))))
+  (macrolet ((frob ((&rest clauses) &body body)
+	       `(case (car expression)
+		  ,@(mapcar (lambda (clause)
+			      (let ((clause (if (atom clause) `(,clause) clause)))
+				`(,(car clause) (,(sb-int:symbolicate "COMPILE-" (or (cadr clause) (car clause)))
+						  expression))))
+			    clauses)
+		  ,@body)))
+    (etypecase expression
+      ((eql character)
+       (compile-character))
+      (terminal
+       (if (consp expression)
+	   (compile-terminal (string (second expression)) nil)
+	   (compile-terminal (string expression) t)))
+      (nonterminal
+       (compile-nonterminal expression))
+      (cons
+       (frob (string (and sequence) (or ordered-choice) (not negation)
+		     (+ greedy-positive-repetition) (? optional) (& followed-by) (-> followed-by-not-gen)
+		     (<- preceded-by-not-gen) (! not-followed-by) character-ranges cond first tag)
+	     (* (cond ((equal (length expression) 2) (compile-greedy-repetition expression))
+		      (t (compile-times expression))))
+	     (t
+	      (if (symbolp (car expression))
+		  (compile-semantic-predicate expression)
+		  (invalid-expression-error expression)))))
+      (t
+       (invalid-expression-error expression)))))
 
 ;;; Characters and strings
 
@@ -1428,6 +1399,21 @@ inspection."
     (let ((sub (compile-expression subexpr)))
       (named-lambda compiled-negation (text position end)
         (exec-negation sub expression text position end)))))
+
+;;; On-the-fly tagging
+(defun eval-tag (expression text position end)
+  (funcall (compile-tag expression) text position end))
+
+(defun compile-tag (expression)
+  (with-expression (expression (tag keyword subexpr))
+    (let ((function (compile-expression subexpr)))
+      (named-lambda compiled-tag (text position end)
+        (let ((result (funcall function text position end)))
+	  (if (error-result-p result)
+	      result
+	      (make-result
+	       :position (result-position result)
+	       :production `(,keyword ,(result-production result)))))))))
 
 ;;; Greedy repetitions
 
