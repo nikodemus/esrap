@@ -30,16 +30,18 @@
 ;;;;  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 (defpackage :esrap
-  (:use :cl :alexandria)
+  (:use :cl :alexandria :defmacro-enhance :iterate)
+  (:shadowing-import-from :rutils.string :strcat)
   #+sbcl
   (:lock t)
   (:export
    #:&bounds
 
-   #:! #:? #:+ #:* #:& #:~
-   #:character-ranges
+   #:! #:? #:+ #:* #:& #:~ #:<- #:->
+   #:character-ranges #:wrap #:tag
 
    #:add-rule
+   #:register-context
    #:call-transform
    #:change-rule
    #:concat
@@ -66,6 +68,8 @@
 (in-package :esrap)
 
 ;;; Conditions
+
+(defun foo () nil)
 
 (define-condition esrap-error (parse-error)
   ((text :initarg :text :initform nil :reader esrap-error-text)
@@ -393,18 +397,26 @@ symbols."
 ;;; For now we just use EQUAL hash-tables, but a specialized
 ;;; representation would probably pay off.
 
+(defparameter contexts nil)
+(defmacro register-context (context-sym)
+  `(push ',context-sym contexts))
+
 (defvar *cache*)
 
 (defun make-cache ()
   (make-hash-table :test #'equal))
 
 (defun get-cached (symbol position cache)
-  (gethash (cons symbol position) cache))
+  (gethash `(,symbol ,position ,@(mapcar #'symbol-value contexts)) cache))
 
 (defun (setf get-cached) (result symbol position cache)
-  (setf (gethash (cons symbol position) cache) result))
+  (setf (gethash `(,symbol ,position ,@(mapcar #'symbol-value contexts)) cache) result))
 
 (defvar *nonterminal-stack* nil)
+
+(defun hash->assoc (hash)
+  (iter (for (key val) in-hashtable hash)
+	(collect `(,key . ,val))))
 
 ;;; SYMBOL, POSITION, and CACHE must all be lexical variables!
 (defmacro with-cached-result ((symbol position &optional (text nil)) &body forms)
@@ -489,24 +501,24 @@ are allowed only if JUNK-ALLOWED is true."
      end
      junk-allowed)))
 
-(define-compiler-macro parse (&whole form expression &rest arguments
-                              &environment env)
-  (if (constantp expression env)
-      (with-gensyms (expr-fun)
-        `(let ((,expr-fun (load-time-value (compile-expression ,expression))))
-           ;; This inline-lambda here provides keyword defaults and
-           ;; parsing, so the compiler-macro doesn't have to worry
-           ;; about evaluation order.
-           ((lambda (text &key (start 0) end junk-allowed)
-              (let ((*cache* (make-cache))
-                    (end (or end (length text))))
-                (process-parse-result
-                 (funcall ,expr-fun text start end)
-                 text
-                 end
-                 junk-allowed)))
-            ,@arguments)))
-      form))
+;; (define-compiler-macro parse (&whole form expression &rest arguments
+;;                               &environment env)
+;;   (if (constantp expression env)
+;;       (with-gensyms (expr-fun)
+;;         `(let ((,expr-fun (load-time-value (compile-expression ,expression))))
+;;            ;; This inline-lambda here provides keyword defaults and
+;;            ;; parsing, so the compiler-macro doesn't have to worry
+;;            ;; about evaluation order.
+;;            ((lambda (text &key (start 0) end junk-allowed)
+;;               (let ((*cache* (make-cache))
+;;                     (end (or end (length text))))
+;;                 (process-parse-result
+;;                  (funcall ,expr-fun text start end)
+;;                  text
+;;                  end
+;;                  junk-allowed)))
+;;             ,@arguments)))
+;;       form))
 
 (defun process-parse-result (result text end junk-allowed)
   (if (error-result-p result)
@@ -533,7 +545,7 @@ are allowed only if JUNK-ALLOWED is true."
                       position
                       (simple-esrap-error text position "Incomplete parse.")))))))
 
-(defmacro defrule (&whole form symbol expression &body options)
+(defmacro! defrule (&whole form symbol expression &body options)
   "Define SYMBOL as a nonterminal, using EXPRESSION as associated the parsing expression.
 
 Following OPTIONS can be specified:
@@ -598,6 +610,37 @@ Following OPTIONS can be specified:
 
     This option can be used to safely track nesting depth, manage symbol
     tables or for other stack-like operations.
+  * (:WRAP-AROUND &BODY BODY)
+
+    Another way to perform stack-like operations.
+    Shadows everything, that's specified in the :AROUND clause.
+    If used, it is assumed, that EXPRESSION is of the form (LIST 'WRAP WRAPPER WRAPPIE),
+    where WRAPPER and WRAPPIE are arbitrary expressions, not containing WRAP.
+    All this being the case, parsing of a rule proceeds as follows:
+       * first, WRAPPER is parsed.
+       * if that succeeds, BODY is executed, with WRAPPER bound to result of parsing
+         WRAPPER, and PARSER bound to thunk to parse WRAPPIE.
+         Additionally, CALL-PARSER is synonym to (FUNCALL PARSER),
+         just to mimick CALL-TRANSFORM of original :AROUND clause.
+
+    Typical use-case would be:
+
+        (defrule my-wrapping-rule (wrap wrapper wrappie)
+          (:wrap-around (let ((context-var-1 (car wrapper)) ; set dynamic state based on WRAPPER
+                              (context-var-2 (cadr wrapper)))
+                          (call-parser))) ; trigger further parsing
+          (:lambda (lst) ; LST here is result of parsing WRAPPIE
+             (list :context `(,context-var-1 ,context-var-2) ; yep, we are inside the context
+                   :content lst)))                           ; designated by the wrapper.
+
+    If that sounds a little bit confusing, see test-suite DYNAMIC-WRAPPING
+    in TESTS.LISP and EXAMPLE-VERY-CONTEXT-SENSITIVE.LISP for examples.
+    This feature was introduced to express rules for reading block-scalars in YaML,
+    hence, see www.yaml.org for the specification of block scalars and the idea of why
+    this feature is needed.
+
+    Since no parsing of a WRAPPIE is occured at the time BODY is executed, nothing sensible
+    can be bound to &BOUNDS.
 "
   (let ((transform nil)
         (around nil)
@@ -664,7 +707,13 @@ Following OPTIONS can be specified:
                                         (function transform))
                                (flet ((call-transform ()
                                         (funcall transform)))
-                                 ,@forms)))))))))
+                                 ,@forms)))))
+	    ((:wrap-around &body forms)
+	     (setf around `(lambda (,e!-wrapper ,e!-parser) ; should change to g!-syms here
+			     (declare (ignorable ,e!-wrapper ,e!-parser))
+			     (flet ((,e!-call-parser ()
+				      (funcall ,e!-parser)))
+			       ,@forms))))))))
     `(eval-when (:load-toplevel :execute)
        (add-rule ',symbol (make-instance 'rule
                                          :expression ',expression
@@ -683,11 +732,13 @@ associated with a rule, the old rule is removed first."
     (error "~S is already associated with the nonterminal ~S -- remove it first."
            rule (rule-symbol rule)))
   (let* ((cell (ensure-rule-cell symbol))
-         (function (compile-rule symbol
+	 (function (compile-rule symbol
                                  (rule-expression rule)
                                  (rule-condition rule)
                                  (rule-transform rule)
                                  (rule-around rule)))
+         (function (lambda (text position end)
+		     (funcall function text position end)))
          (trace-info (cell-trace-info cell)))
     (set-cell-info cell function rule)
     (setf (cell-trace-info cell) nil)
@@ -860,58 +911,88 @@ inspection."
 
 (defun compile-rule (symbol expression condition transform around)
   (declare (type (or boolean function) condition transform around))
-  (let* ((*current-rule* symbol)
-         ;; Must bind *CURRENT-RULE* before compiling the expression!
-         (function (compile-expression expression))
-         (rule-not-active (when condition (make-inactive-rule :name symbol))))
-    (cond ((not condition)
-           (named-lambda inactive-rule (text position end)
-             (declare (ignore text position end))
-             rule-not-active))
-          (transform
-           (flet ((exec-rule/transform (text position end)
-                    (let ((result (funcall function text position end)))
-                      (if (error-result-p result)
-                          (make-failed-parse
-                           :expression symbol
-                           :position (if (failed-parse-p result)
-                                         (failed-parse-position result)
-                                         position)
-                           :detail result)
-                          (if around
-                              (make-result
-                               :position (result-position result)
-                               :production (flet ((call-rule ()
-                                                    (funcall transform
-                                                             (result-production result)
-                                                             position
-                                                             (result-position result))))
-                                             (funcall around position (result-position result) #'call-rule)))
-                              (make-result
-                               :position (result-position result)
-                               :production (funcall transform
-                                                    (result-production result)
-                                                    position
-                                                    (result-position result))))))))
-             (if (eq t condition)
-                 (named-lambda rule/transform (text position end)
-                   (with-cached-result (symbol position text)
-                     (exec-rule/transform text position end)))
-                 (named-lambda condition-rule/transform (text position end)
-                   (with-cached-result (symbol position text)
-                     (if (funcall condition)
-                         (exec-rule/transform text position end)
-                         rule-not-active))))))
-          (t
-           (if (eq t condition)
-               (named-lambda rule (text position end)
-                 (with-cached-result (symbol position text)
-                   (funcall function text position end)))
-               (named-lambda conditional-rule (text position end)
-                 (with-cached-result (symbol position text)
-                   (if (funcall condition)
-                       (funcall function text position end)
-                       rule-not-active))))))))
+  (macrolet ((cur-parse-failed (&optional (result-var 'result))
+	       `(make-failed-parse
+		 :expression symbol
+		 :position (if (failed-parse-p ,result-var)
+			       (failed-parse-position ,result-var)
+			       position)
+		 :detail ,result-var))
+	     (call-transform (&optional (result-var 'result))
+	       `(funcall transform
+			 (result-production ,result-var)
+			 position
+			 (result-position ,result-var)))
+	     (conditionally-exec (name &body body)
+	       `(if (eq t condition)
+		    (named-lambda ,name (text position end)
+		      (with-cached-result (symbol position text)
+			,@body))
+		    (named-lambda ,(intern (strcat "CONDITIONAL-" name)) (text position end)
+		     (with-cached-result (symbol position text)
+		       (if (funcall condition)
+			   (progn ,@body)
+			   rule-not-active)))))
+	     (make-result-evenly (result-var &optional (production '(call-transform)))
+	       `(make-result :position (result-position ,result-var)
+			     :production ,production)))
+    (let ((*current-rule* symbol))
+      ;; Must bind *CURRENT-RULE* before compiling the expression!
+      (if (and (consp expression)
+	       (symbolp (car expression))
+	       (equal (string (car expression)) "WRAP"))
+	  (destructuring-bind (wrap wrapper wrappie) expression
+	    (declare (ignore wrap))
+	    (let* ((func-wrapper (compile-expression wrapper))
+		   (rule-not-active (when condition (make-inactive-rule :name symbol))))
+	      (cond ((not condition)
+		     (named-lambda inactive-rule (text position end)
+		       (declare (ignore text position end))
+		       rule-not-active))
+		    ((not (and transform around))
+		     (error "When specifying WRAP rule both TRANSFORM and AROUND should be present."))
+		    (t (flet ((exec-rule/wrap (text position end)
+				(let ((wrapper-result (funcall func-wrapper text position end)))
+				  (if (error-result-p wrapper-result)
+				      (cur-parse-failed wrapper-result)
+				      (funcall around
+					       (result-production wrapper-result)
+					       (lambda ()
+						 (let* ((func-wrappie (compile-expression wrappie))
+							(wrappie-result (funcall func-wrappie text
+										 (result-position wrapper-result)
+										 end)))
+						   (if (error-result-p wrappie-result)
+						       (cur-parse-failed wrappie-result)
+						       (let ((production (call-transform wrappie-result)))
+							 (make-result-evenly wrappie-result
+									     (values production)))))))))))
+			 (conditionally-exec rule/wrap
+			   (exec-rule/wrap text position end)))))))
+	  (let* ((function (compile-expression expression))
+		 (rule-not-active (when condition (make-inactive-rule :name symbol))))
+	    (cond ((not condition)
+		   (named-lambda inactive-rule (text position end)
+		     (declare (ignore text position end))
+		     rule-not-active))
+		  (transform
+		   (flet ((exec-rule/transform (text position end)
+			    (let ((result (funcall function text position end)))
+			      (if (error-result-p result)
+				  (cur-parse-failed)
+				  (if around
+				      (make-result-evenly result
+							  (flet ((call-rule ()
+								   (call-transform)))
+							    (funcall around
+								     position
+								     (result-position result)
+								     #'call-rule)))
+				      (make-result-evenly result))))))
+		     (conditionally-exec rule/transform
+		       (exec-rule/transform text position end))))
+		  (t (conditionally-exec rule
+		       (funcall function text position end)))))))))
 
 ;;; EXPRESSION COMPILER & EVALUATOR
 
@@ -938,7 +1019,7 @@ inspection."
          t)
         (cons
          (case (car expression)
-           ((and or)
+           ((and or wrap)
             (and (every #'validate-expression (cdr expression)) t))
            ((nil)
             nil)
@@ -947,6 +1028,15 @@ inspection."
                  (typep (second expression) 'array-length)))
            (character-ranges
             (and (every #'validate-character-range (cdr expression)) t))
+	   (* (and (>= (length expression) 2)
+		   (validate-expression (car (last expression)))))
+	   (cond (and (every (lambda (x)
+			       (and (every #'validate-expression x) t))
+			     (cdr expression))
+		      t))
+	   (tag (and (equal (length expression) 3)
+		     (keywordp (cadr expression))
+		     (validate-expression (caddr expression))))
            (t
             (and (symbolp (car expression))
                  (cdr expression) (not (cddr expression))
@@ -1002,82 +1092,66 @@ inspection."
         (%expression-direct-dependencies (second expression) seen))))))
 
 (defun eval-expression (expression text position end)
-  (typecase expression
-    ((eql character)
-     (eval-character text position end))
-    (terminal
-     (if (consp expression)
-         (eval-terminal (string (second expression)) text position end nil)
-         (eval-terminal (string expression) text position end t)))
-    (nonterminal
-     (eval-nonterminal expression text position end))
-    (cons
-     (case (car expression)
-       (string
-        (eval-string expression text position end))
-       (and
-        (eval-sequence expression text position end))
-       (or
-        (eval-ordered-choise expression text position end))
-       (not
-        (eval-negation expression text position end))
-       (*
-        (eval-greedy-repetition expression text position end))
-       (+
-        (eval-greedy-positive-repetition expression text position end))
-       (?
-        (eval-optional expression text position end))
-       (&
-        (eval-followed-by expression text position end))
-       (!
-        (eval-not-followed-by expression text position end))
-       (character-ranges
-        (eval-character-ranges expression text position end))
-       (t
-        (if (symbolp (car expression))
-            (eval-semantic-predicate expression text position end)
-            (invalid-expression-error expression)))))
-    (t
-     (invalid-expression-error expression))))
+  (macrolet ((frob ((&rest clauses) &body body)
+	       `(case (car expression)
+		  ,@(mapcar (lambda (clause)
+			      (let ((clause (if (atom clause) `(,clause) clause)))
+				`(,(car clause) (,(sb-int:symbolicate "EVAL-" (or (cadr clause) (car clause)))
+						  expression text position end))))
+			    clauses)
+		  ,@body)))
+    (typecase expression
+      ((eql character)
+       (eval-character text position end))
+      (terminal
+       (if (consp expression)
+	   (eval-terminal (string (second expression)) text position end nil)
+	   (eval-terminal (string expression) text position end t)))
+      (nonterminal
+       (eval-nonterminal expression text position end))
+      (cons
+       (frob (string (and sequence) (or ordered-choice) (not negation)
+		     (+ greedy-positive-repetition) (? optional) (& followed-by) (-> followed-by-not-gen)
+		     (<- preceded-by-not-gen) (! not-followed-by) character-ranges cond first tag)
+	     (* (cond ((equal (length expression) 2) (eval-greedy-repetition expression text position end))
+		      (t (eval-times expression text position end))))
+	     (t
+	      (if (symbolp (car expression))
+		  (eval-semantic-predicate expression text position end)
+		  (invalid-expression-error expression)))))
+      (t
+       (invalid-expression-error expression)))))
 
 (defun compile-expression (expression)
-  (etypecase expression
-    ((eql character)
-     (compile-character))
-    (terminal
-     (if (consp expression)
-         (compile-terminal (string (second expression)) nil)
-         (compile-terminal (string expression) t)))
-    (nonterminal
-     (compile-nonterminal expression))
-    (cons
-     (case (car expression)
-       (string
-        (compile-string expression))
-       (and
-        (compile-sequence expression))
-       (or
-        (compile-ordered-choise expression))
-       (not
-        (compile-negation expression))
-       (*
-        (compile-greedy-repetition expression))
-       (+
-        (compile-greedy-positive-repetition expression))
-       (?
-        (compile-optional expression))
-       (&
-        (compile-followed-by expression))
-       (!
-        (compile-not-followed-by expression))
-       (character-ranges
-        (compile-character-ranges expression))
-       (t
-        (if (symbolp (car expression))
-            (compile-semantic-predicate expression)
-            (invalid-expression-error expression)))))
-    (t
-     (invalid-expression-error expression))))
+  (macrolet ((frob ((&rest clauses) &body body)
+	       `(case (car expression)
+		  ,@(mapcar (lambda (clause)
+			      (let ((clause (if (atom clause) `(,clause) clause)))
+				`(,(car clause) (,(sb-int:symbolicate "COMPILE-" (or (cadr clause) (car clause)))
+						  expression))))
+			    clauses)
+		  ,@body)))
+    (etypecase expression
+      ((eql character)
+       (compile-character))
+      (terminal
+       (if (consp expression)
+	   (compile-terminal (string (second expression)) nil)
+	   (compile-terminal (string expression) t)))
+      (nonterminal
+       (compile-nonterminal expression))
+      (cons
+       (frob (string (and sequence) (or ordered-choice) (not negation)
+		     (+ greedy-positive-repetition) (? optional) (& followed-by) (-> followed-by-not-gen)
+		     (<- preceded-by-not-gen) (! not-followed-by) character-ranges cond first tag)
+	     (* (cond ((equal (length expression) 2) (compile-greedy-repetition expression))
+		      (t (compile-times expression))))
+	     (t
+	      (if (symbolp (car expression))
+		  (compile-semantic-predicate expression)
+		  (invalid-expression-error expression)))))
+      (t
+       (invalid-expression-error expression)))))
 
 ;;; Characters and strings
 
@@ -1195,9 +1269,9 @@ inspection."
                     (setf position (result-position result)))
                 (push result results))))))))
 
-;;; Ordered choises
+;;; Ordered choices
 
-(defun eval-ordered-choise (expression text position end)
+(defun eval-ordered-choice (expression text position end)
   (with-expression (expression (or &rest subexprs))
     (let (last-error)
       (dolist (expr subexprs
@@ -1220,7 +1294,7 @@ inspection."
                 (setf last-error result))
               (return result)))))))
 
-(defun compile-ordered-choise (expression)
+(defun compile-ordered-choice (expression)
   (with-expression (expression (or &rest subexprs))
     (let ((type :characters)
           (canonized nil))
@@ -1251,10 +1325,10 @@ inspection."
       (ecase type
         (:characters
          ;; If every subexpression is a length 1 string, we can represent the whole
-         ;; choise with a single string.
-         (let ((choises (apply #'concatenate 'string canonized)))
-           (named-lambda compiled-character-choise (text position end)
-             (let ((c (and (< position end) (find (char text position) choises))))
+         ;; choice with a single string.
+         (let ((choices (apply #'concatenate 'string canonized)))
+           (named-lambda compiled-character-choice (text position end)
+             (let ((c (and (< position end) (find (char text position) choices))))
                (if c
                    (make-result :position (+ 1 position)
                                 :production (string c))
@@ -1262,23 +1336,23 @@ inspection."
                     :expression expression
                     :position position))))))
         (:strings
-         ;; If every subexpression is a string, we can represent the whole choise
+         ;; If every subexpression is a string, we can represent the whole choice
          ;; with a list of strings.
-         (let ((choises (nreverse canonized)))
-           (named-lambda compiled-character-choise (text position end)
-             (dolist (choise choises
+         (let ((choices (nreverse canonized)))
+           (named-lambda compiled-character-choice (text position end)
+             (dolist (choice choices
                       (make-failed-parse
                        :expression expression
                        :position position))
-               (let ((len (length choise)))
-                 (when (match-terminal-p choise len text position end t)
+               (let ((len (length choice)))
+                 (when (match-terminal-p choice len text position end t)
                    (return
                      (make-result :position (+ len position)
-                                  :production choise))))))))
+                                  :production choice))))))))
         (:general
          ;; In the general case, compile subexpressions and call.
          (let ((functions (mapcar #'compile-expression subexprs)))
-             (named-lambda compiled-ordered-choise (text position end)
+             (named-lambda compiled-ordered-choice (text position end)
                (let (last-error)
                  (dolist (fun functions
                           (make-failed-parse
@@ -1326,6 +1400,21 @@ inspection."
       (named-lambda compiled-negation (text position end)
         (exec-negation sub expression text position end)))))
 
+;;; On-the-fly tagging
+(defun eval-tag (expression text position end)
+  (funcall (compile-tag expression) text position end))
+
+(defun compile-tag (expression)
+  (with-expression (expression (tag keyword subexpr))
+    (let ((function (compile-expression subexpr)))
+      (named-lambda compiled-tag (text position end)
+        (let ((result (funcall function text position end)))
+	  (if (error-result-p result)
+	      result
+	      (make-result
+	       :position (result-position result)
+	       :production `(,keyword ,(result-production result)))))))))
+
 ;;; Greedy repetitions
 
 (defun eval-greedy-repetition (expression text position end)
@@ -1336,13 +1425,45 @@ inspection."
     (let ((function (compile-expression subexpr)))
       (named-lambda compiled-greedy-repetition (text position end)
         (let ((results
-               (loop for result = (funcall function text position end)
-                     until (error-result-p result)
-                     do (setf position (result-position result))
-                     collect result)))
+               (iter (for result next (funcall function text position end))
+		     (until (or (error-result-p result)
+				(if-first-time nil
+					       (equal (result-position result) position))))
+                     (setf position (result-position result))
+                     (collect result))))
           (make-result
            :position position
            :production (mapcar #'result-production results)))))))
+
+(defun eval-times (expression text position end)
+  (funcall (compile-times expression) text position end))
+
+(defun compile-times (expression)
+  (destructuring-bind (from to subexpr)
+      (if (equal (length expression) 3)
+	  `(0 ,@(cdr expression))
+	  (cdr expression))
+    (let ((evallee `(let ((function (compile-expression ',subexpr)))
+		      (named-lambda compiled-times (text position end)
+			(let* ((last nil)
+			       (results
+				(iter ,@(if to `((for i from 1 to ,to)))
+				      (for result next (funcall function text position end))
+				      (until (or (error-result-p (setf last result))
+						 (if-first-time nil
+								(equal (result-position result) position))))
+				      (setf position (result-position result))
+				      (collect result))))
+			  (if (>= (length results) ,from)
+			      (make-result
+			       :position position
+			       :production (mapcar #'result-production results))
+			      (make-failed-parse
+			       :position position
+			       :expression ',expression
+			       :detail last)))))))
+      (eval evallee))))
+
 
 ;;; Greedy positive repetitions
 
@@ -1356,10 +1477,12 @@ inspection."
       (named-lambda compiled-greedy-positive-repetition (text position end)
         (let* ((last nil)
                (results
-                (loop for result = (funcall function text position end)
-                     until (error-result-p (setf last result))
-                     do (setf position (result-position result))
-                     collect result)))
+                (iter (for result next (funcall function text position end))
+		      (until (or (error-result-p (setf last result))
+				 (if-first-time nil
+						(equal (result-position result) position))))
+		      (setf position (result-position result))
+		      (collect result))))
           (if results
               (make-result
                :position position
@@ -1415,6 +1538,42 @@ inspection."
                :position position
                :production (result-production result))))))))
 
+;;; Followed-by-not-gen's
+
+(defun eval-followed-by-not-gen (expression text position end)
+  (with-expression (expression (-> subexpr))
+    (let ((result (if (and (symbolp subexpr) (equal (string subexpr) "EOF"))
+		      (if (equal position end)
+			  (make-result :position position)
+			  (make-failed-parse :expression subexpr :position position))
+		      (eval-expression subexpr text position end))))
+      (if (error-result-p result)
+          (make-failed-parse
+           :position position
+           :expression expression
+           :detail result)
+          (make-result
+           :position position)))))
+
+(defun compile-followed-by-not-gen (expression)
+  (with-expression (expression (-> subexpr))
+    (let ((function (if (and (symbolp subexpr) (equal (string subexpr) "EOF"))
+			(lambda (text position end)
+			  (declare (ignore text))
+			  (if (equal position end)
+			      (make-result :position position)
+			      (make-failed-parse :expression subexpr :position position)))
+			(compile-expression subexpr))))
+      (named-lambda compiled-followed-by-not-gen (text position end)
+        (let ((result (funcall function text position end)))
+          (if (error-result-p result)
+              (make-failed-parse
+               :position position
+               :expression expression
+               :detail result)
+              (make-result
+               :position position)))))))
+
 ;;; Not followed-by's
 
 (defun eval-not-followed-by (expression text position end)
@@ -1438,6 +1597,43 @@ inspection."
               (make-failed-parse
                :expression expression
                :position position)))))))
+
+;;; Preceded-by's
+
+(defun eval-preceded-by-not-gen (expression text position end)
+  (with-expression (expression (<- subexpr))
+    (let ((result (if (and (symbolp subexpr) (equal (string subexpr) "SOF"))
+		      (if (equal position 0)
+			  (make-result :position position)
+			  (make-failed-parse :expression subexpr :position position))
+		      (eval-expression subexpr text (1- position) end))))
+      (if (or (error-result-p result) (not (equal (result-position result) position)))
+          (make-failed-parse
+           :position position
+           :expression expression
+           :detail result)
+          (make-result
+           :position position)))))
+
+(defun compile-preceded-by-not-gen (expression)
+  (with-expression (expression (<- subexpr))
+    (let ((function (if (and (symbolp subexpr) (equal (string subexpr) "SOF"))
+			(lambda (text position end)
+			  (declare (ignore text end))
+			  (if (equal position -1)
+			      (make-result :position 0)
+			      (make-failed-parse :expression subexpr :position position)))
+			(compile-expression subexpr))))
+      (named-lambda compiled-preceded-by-not-gen (text position end)
+        (let ((result (funcall function text (1- position) end)))
+          (if (or (error-result-p result) (not (equal (result-position result) position)))
+              (make-failed-parse
+               :position position
+               :expression expression
+               :detail result)
+              (make-result
+               :position position)))))))
+
 
 ;;; Semantic predicates
 
@@ -1509,6 +1705,69 @@ inspection."
   (with-expression (expression (character-ranges &rest ranges))
     (named-lambda compiled-character-ranges (text position end)
       (exec-character-ranges expression ranges text position end))))
+
+(defun eval-cond (expression text position end)
+  (funcall (compile-cond expression)
+           text position end))
+
+(defun compile-cond (expression)
+  (with-expression (expression (cond &rest subexprs))
+    (let ((functions (iter (for subexp in subexprs)
+			   (collect `(,(if (and (symbolp (car subexp))
+						(or (eql (car subexp) 't)
+						    (eql (car subexp) 'otherwise)))
+					   (lambda (text start end)
+					     (declare (ignore text end))
+					     (make-result :position start
+							  :production (lambda () t)))
+					   (compile-expression (car subexp)))
+				       ,(compile-expression (cadr subexp)))))))
+      (named-lambda compiled-cond (text position end)
+	(let (pred-result result last-error)
+	  (macrolet ((mark-result-as-last-error (&optional (result-var 'result))
+		       `(when (or (and (not last-error)
+				       (or (inactive-rule-p ,result-var)
+					   (< position (failed-parse-position ,result-var))))
+				  (and last-error
+				       (failed-parse-p ,result-var)
+				       (or (inactive-rule-p last-error)
+					   (< (failed-parse-position last-error)
+					      (failed-parse-position ,result-var)))))
+			  (setf last-error ,result-var))))
+	    (iter (for (predicate value-function) in functions)
+		  (setf pred-result (funcall predicate text position end))
+		  (if (error-result-p pred-result)
+		      (mark-result-as-last-error pred-result)
+		      (progn (setf result (funcall value-function text
+						   (result-position pred-result) end))
+			     (if (error-result-p result)
+				 (mark-result-as-last-error)
+				 (terminate))))
+		  (finally (return (if (and result (not (error-result-p result)))
+				       result
+				       (make-failed-parse
+					:expression expression
+					:position (if (and last-error
+							   (failed-parse-p last-error))
+						      (failed-parse-position last-error)
+						      position)
+					:detail last-error)))))))))))
+
+(defun eval-first (expression text position end)
+  (funcall (compile-first expression)
+           text position end))
+
+(defun compile-first (expression)
+  (with-expression (expression (first subexpr))
+    (let ((function (compile-expression subexpr)))
+      (named-lambda compiled-first (text position end)
+        (let ((result (funcall function text position end)))
+          (if (error-result-p result)
+	      result
+              (make-result
+               :position (result-position result)
+               :production (car (result-production result)))))))))
+			  
 
 (defvar *indentation-hint-table* nil)
 

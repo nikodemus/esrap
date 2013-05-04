@@ -269,7 +269,7 @@
              (multiple-value-list (parse '(or "foo" "bar") "foo"))))
   (is (eq 'foo+ (add-rule 'foo+
                           (make-instance 'rule :expression '(+ "foo")))))
-  (is (equal '("foo" "foo" "foo")
+  (is (equal '(("foo" "foo" "foo") nil)
              (multiple-value-list (parse 'foo+ "foofoofoo"))))
   (is (eq 'decimal
           (add-rule 'decimal
@@ -282,6 +282,87 @@
   (is (eql 123 (parse '(oddp decimal) "123")))
   (is (equal '(nil 0)
              (multiple-value-list (parse '(evenp decimal) "123" :junk-allowed t)))))
+
+;; Testing ambiguity when repetitioning possibly empty-string-match
+
+(defrule spaces (* #\space)
+  (:lambda (lst)
+    (length lst)))
+
+(defrule greedy-pos-spaces (+ spaces))
+(defrule greedy-spaces (* spaces))
+
+(test ambiguous-greedy-repetitions
+  (is (equal '((3) nil) (multiple-value-list (parse 'greedy-spaces "   "))))
+  (is (equal '((3) nil) (multiple-value-list (parse 'greedy-pos-spaces "   ")))))
+
+(defparameter separator #\space)
+
+(defrule simple-prefix (character-ranges (#\a #\z)))
+
+(defun separator-p (x)
+  (and (characterp x) (char= x separator)))
+
+(defrule separator (separator-p character))
+
+(defrule word (+ (not separator))
+  (:text t))
+
+(defrule simple-wrapped (wrap simple-prefix
+			      (and word
+				   (* (and separator word))
+				   (? separator)))
+  (:wrap-around (let ((separator wrapper))
+		  (call-parser)))
+  (:destructure (word rest-words sep)
+		(declare (ignore sep))
+		`(,word ,@(mapcar #'cadr rest-words))))
+
+(test dynamic-wrapping			      
+  (is (equal '(("oo" "oo" "oo") nil)
+	     (multiple-value-list (parse 'simple-wrapped "foofoofoof"))))
+  (is (equal '(("oofoofoof") nil)
+	     (multiple-value-list (parse 'simple-wrapped "goofoofoof")))))
+
+(defparameter dyna-from 3)
+(defparameter dyna-to 5)
+
+(defrule dyna-from-to (* dyna-from dyna-to "a")
+  (:text t))
+
+(defrule dyna-from-tos (* dyna-from-to))
+
+(test dynamic-times
+  (is (equal '("aaaaa" "aaa") (parse 'dyna-from-tos "aaaaaaaa")))
+  (is (equal '("aaaa" "aaaa") (let ((dyna-to 4))
+				(parse 'dyna-from-tos "aaaaaaaa")))))
+
+(defrule cond-word (cond (dyna-from-to word)))
+
+(defparameter context :void)
+
+(defun in-context-p (x)
+  (declare (ignore x))
+  (and context (not (eql context :void))))
+(defrule context (in-context-p ""))
+(defrule ooc-word word
+  (:constant "out of context word"))
+(test cond
+  (is (equal "foo" (parse 'cond-word "aaaafoo")))
+  (is (equal "foo" (let ((context t)) (parse '(cond (context word)) "foo"))))
+  (is (equal :error-occured (handler-case (parse '(cond (context word)) "foo")
+			      (error () :error-occured))))
+  (is (equal "out of context word" (parse '(cond (context word) (t ooc-word))
+					  "foo"))))
+
+(test followed-by-not-gen
+  (is (equal '("a" nil "b") (parse '(and "a" (-> "b") "b") "ab"))))
+
+(test preceded-by-not-gen
+  (is (equal '("a" nil "b") (parse '(and "a" (<- "a") "b") "ab"))))
+
+(test on-the-fly-tagging
+  (is (equal '(:simple-tag "aaa") (parse '(tag :simple-tag "aaa") "aaa"))))
 
 (defun run-tests ()
   (let ((results (run 'esrap)))
