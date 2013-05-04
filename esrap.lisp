@@ -1556,7 +1556,11 @@ inspection."
 
 (defun eval-followed-by-not-gen (expression text position end)
   (with-expression (expression (-> subexpr))
-    (let ((result (eval-expression subexpr text position end)))
+    (let ((result (if (and (symbolp subexpr) (equal (string subexpr) "EOF"))
+		      (if (equal position end)
+			  (make-result :position position)
+			  (make-failed-parse :expression subexpr :position position))
+		      (eval-expression subexpr text position end))))
       (if (error-result-p result)
           (make-failed-parse
            :position position
@@ -1567,7 +1571,13 @@ inspection."
 
 (defun compile-followed-by-not-gen (expression)
   (with-expression (expression (-> subexpr))
-    (let ((function (compile-expression subexpr)))
+    (let ((function (if (and (symbolp subexpr) (equal (string subexpr) "EOF"))
+			(lambda (text position end)
+			  (declare (ignore text))
+			  (if (equal position end)
+			      (make-result :position position)
+			      (make-failed-parse :expression subexpr :position position)))
+			(compile-expression subexpr))))
       (named-lambda compiled-followed-by-not-gen (text position end)
         (let ((result (funcall function text position end)))
           (if (error-result-p result)
@@ -1606,7 +1616,11 @@ inspection."
 
 (defun eval-preceded-by-not-gen (expression text position end)
   (with-expression (expression (<- subexpr))
-    (let ((result (eval-expression subexpr text (1- position) end)))
+    (let ((result (if (and (symbolp subexpr) (equal (string subexpr) "SOF"))
+		      (if (equal position 0)
+			  (make-result :position position)
+			  (make-failed-parse :expression subexpr :position position))
+		      (eval-expression subexpr text (1- position) end))))
       (if (or (error-result-p result) (not (equal (result-position result) position)))
           (make-failed-parse
            :position position
@@ -1617,8 +1631,14 @@ inspection."
 
 (defun compile-preceded-by-not-gen (expression)
   (with-expression (expression (<- subexpr))
-    (let ((function (compile-expression subexpr)))
-      (named-lambda compiled-followed-by-not-gen (text position end)
+    (let ((function (if (and (symbolp subexpr) (equal (string subexpr) "SOF"))
+			(lambda (text position end)
+			  (declare (ignore text end))
+			  (if (equal position -1)
+			      (make-result :position 0)
+			      (make-failed-parse :expression subexpr :position position)))
+			(compile-expression subexpr))))
+      (named-lambda compiled-preceded-by-not-gen (text position end)
         (let ((result (funcall function text (1- position) end)))
           (if (or (error-result-p result) (not (equal (result-position result) position)))
               (make-failed-parse
