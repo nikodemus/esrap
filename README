@@ -1,5 +1,10 @@
 ESRAP -- a packrat parser for Common Lisp
 
+This branch attempts to intergrate DEFRULE macro and COMPILE-EXPRESSION and EVAL-EXPRESSION functions
+into a single macro, where no manual code-walking is done and all the wisardy is done through
+MACROLET and SYMBOL-MACROLET's and the like.
+I hope, that it will allow to write a code that's more flexible, hence the name of the branch - liquid.
+
 In addition to regular Packrat / Parsing Grammar / TDPL features ESRAP
 supports:
 
