@@ -1155,65 +1155,54 @@ inspection."
 
 ;;; Characters and strings
 
-(declaim (inline exec-string))
-(defun exec-string (length text position end)
-  (let ((limit (+ length position)))
+(defmacro! any-string (length)
+  (let ((expression '(any-string ,length))
+	(limit (+ ,length position)))
     (if (<= limit end)
         (make-result
          :production (subseq text position limit)
          :position limit)
-        (make-failed-parse
-         :expression `(string ,length)
-         :position position))))
+	(fail "Unable to parse any string of specified length."))))
 
-(defun eval-character (text position end)
-  (if (< position end)
-      (make-result
-       :production (char text position)
-       :position (1+ position))
-      (make-failed-parse
-       :expression 'character
-       :position position)))
+(define-symbol-macro character
+    (let ((expression 'character))
+      (if (< position end)
+	  (make-result
+	   :production (char text position)
+	   :position (1+ position))
+	  (fail "EOF reached while trying to parse character."))))
 
-(defun compile-character ()
-  #'eval-character)
-
-(defun eval-string (expression text position end)
-  (with-expression (expression (string length))
-    (exec-string length text position end)))
-
-(defun compile-string (expression)
-  (with-expression (expression (string length))
-    (named-lambda compiled-string (text position end)
-      (exec-string length text position end))))
 
 ;;; Terminals
 ;;;
 ;;; FIXME: It might be worth it to special-case terminals of length 1.
 
-(declaim (inline match-terminal-p))
-(defun match-terminal-p (string length text position end case-sensitive-p)
-  (and (<= (+ length position) end)
-       (if case-sensitive-p
-           (string= string text :start2 position :end2 (+ position length))
-           (string-equal string text :start2 position :end2 (+ position length)))))
+;;; #]foo[ denotes literal string terminal "foo"
+(set-dispatch-macro-character #\# #\]
+			      (lambda (stream subchar arg)
+				(declare (ignore subchar arg))
+				`(terminal ,(sb-impl::read-string stream #\[) nil)))
 
-(defun exec-terminal (string length text position end case-sensitive-p)
-  (if (match-terminal-p string length text position end case-sensitive-p)
-      (make-result
-       :position (+ length position)
-       :production string)
-      (make-failed-parse
-       :expression string
-       :position position)))
+(set-dispatch-macro-character #\# #\/ (let ((f (get-dispatch-macro-character #\# #\\)))
+					(lambda (stream subchar arg)
+					  (let ((char (funcall f stream subchar arg)))
+					    `(terminal ,char nil)))))
 
-(defun eval-terminal (string text position end case-sensitive-p)
-  (exec-terminal string (length string) text position end case-sensitive-p))
+(defmacro terminal (terminal case-insensitive)
+  (let ((length (length terminal))
+	(terminal (string terminal)))
+    `(if (and (<= (+ ,length position) end)
+	      ,(if case-insensitive
+		   `(string-equal ,terminal text :start2 position :end2 (+ position ,length))
+		   `(string= ,terminal text :start2 position :end2 (+ position ,length))))
+	 (make-result
+	  :position (+ ,length position)
+	  :production '(terminal ,terminal))
+	 (fail))))
 
-(defun compile-terminal (string case-sensitive-p)
-  (let ((length (length string)))
-    (named-lambda compiled-terminal (text position end)
-      (exec-terminal string length text position end case-sensitive-p))))
+(defmacro! ~ (terminal)
+  "Expands into case-insensitive terminal checking."
+  `(terminal ,terminal t))
 
 ;;; Nonterminals
 
@@ -1235,40 +1224,25 @@ inspection."
 ;;; FIXME: It might be better if we actually chained the closures
 ;;; here, instead of looping over them -- benchmark first, though.
 
-(defun eval-sequence (expression text position end)
-  (with-expression (expression (and &rest subexprs))
-    (let (results)
-      (dolist (expr subexprs
-               (make-result
-                :position position
-                :production (mapcar #'result-production (nreverse results))))
-        (let ((result (eval-expression expr text position end)))
-          (if (error-result-p result)
-              (return (make-failed-parse
-                       :expression expression
-                       :position position
-                       :detail result))
-              (setf position (result-position result)))
-          (push result results))))))
+(defmacro! fail (detail)
+  `(error 'parse-error
+	  :expression expression
+	  :position position
+	  :detail ,detail))
+  
 
-(defun compile-sequence (expression)
-  (with-expression (expression (and &rest subexprs))
-    (let ((functions (mapcar #'compile-expression subexprs)))
-      (named-lambda compiled-sequence (text position end)
-          (let (results)
-            (dolist (fun functions
-                     (make-result
-                      :position position
-                      :production (mapcar #'result-production (nreverse results))))
-              (let ((result (funcall fun text position end)))
-                (if (error-result-p result)
-                    (return (make-failed-parse
-                             :expression expression
-                             :position position
-                             :detail result))
-                    (setf position (result-position result)))
-                (push result results))))))))
-
+(defmacro! && (&rest subexpressions)
+  `(let ((,g!-subexprs (list ,@(mapcar (lambda (x) `(lambda ()
+						      (let ((expression ',x))
+							,x))
+					       subexpressions)))))
+     (iter (for ,g!-subexpr in ,g!-subexprs)
+	   (let ((,g!-result (funcall ,g!-subexpr)))
+	     (if (error-result-p ,g!-result)
+		 (fail ,g!-result)
+		 (progn (setf position (result-position ,g!-result))
+			(collect (result-production ,g!-result))))))))
+	   
 ;;; Ordered choices
 
 (defun eval-ordered-choice (expression text position end)
