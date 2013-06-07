@@ -28,6 +28,19 @@
 (def-suite esrap)
 (in-suite esrap)
 
+(test defrule.check-expression
+  "Test expression checking in DEFRULE."
+  (macrolet ((is-invalid-expr (&body body)
+               `(signals invalid-expression-error ,@body)))
+    (is-invalid-expr (defrule foo '(~ 1)))
+    (is-invalid-expr (defrule foo '(string)))
+    (is-invalid-expr (defrule foo '(character-ranges 1)))
+    (is-invalid-expr (defrule foo '(character-ranges (#\a))))
+    (is-invalid-expr (defrule foo '(character-ranges (#\a #\b #\c))))
+    (is-invalid-expr (defrule foo '(and (string))))
+    (is-invalid-expr (defrule foo '(not)))
+    (is-invalid-expr (defrule foo '(foo)))))
+
 ;;;; A few semantic predicates
 
 (defun not-doublequote (char)
@@ -182,7 +195,22 @@
       (is (equal (left-recursion-path condition)
                  '(left-recursion left-recursion))))))
 
-(test negation
+(test parse.string
+  "Test parsing an arbitrary string of a given length."
+  (is (equal "" (parse '(string 0) "")))
+  (is (equal "aa" (parse '(string 2) "aa")))
+  (signals esrap-error (parse '(string 0) "a"))
+  (signals esrap-error (parse '(string 2) "a"))
+  (signals esrap-error (parse '(string 2) "aaa")))
+
+(test parse.case-insensitive
+  "Test parsing an arbitrary string of a given length."
+  (dolist (input '("aabb" "AABB" "aAbB" "aaBB" "AAbb"))
+    (is (equal "aabb" (text (parse '(* (or (~ #\a) (~ #\b))) input))))
+    (is (equal "AABB" (text (parse '(* (or (~ #\A) (~ #\B))) input))))
+    (is (equal "aaBB" (text (parse '(* (or (~ #\a) (~ #\B))) input))))))
+
+(test parse.negation
   "Test negation in rules."
   (let* ((text "FooBazBar")
          (t1c (text (parse '(+ (not "Baz")) text :junk-allowed t)))

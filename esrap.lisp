@@ -49,6 +49,8 @@
    #:esrap-error-position
    #:esrap-error-text
    #:find-rule
+   #:invalid-expression-error
+   #:invalid-expression-error-expression
    #:left-recursion
    #:left-recursion-nonterminal
    #:left-recursion-path
@@ -66,6 +68,20 @@
 (in-package :esrap)
 
 ;;; Conditions
+
+(define-condition invalid-expression-error (error)
+  ((expression :initarg :expression :reader invalid-expression-error-expression))
+  (:default-initargs
+   :expression (required-argument :expression))
+  (:documentation
+   "Signaled when an invalid expression is encountered."))
+
+(defmethod print-object ((condition invalid-expression-error) stream)
+  (format stream "Invalid expression: ~S"
+          (invalid-expression-error-expression condition)))
+
+(defun invalid-expression-error (expression)
+  (error 'invalid-expression-error :expression expression))
 
 (define-condition esrap-error (parse-error)
   ((text :initarg :text :initform nil :reader esrap-error-text)
@@ -232,8 +248,35 @@ for use with IGNORE."
 (deftype terminal ()
   "Literal strings and characters are used as case-sensitive terminal symbols,
 and expressions of the form \(~ <literal>) denote case-insensitive terminals."
-  `(or string character
+  '(or string character
        (cons (eql ~) (cons (or string character) null))))
+
+(deftype character-range ()
+  "A character range is either a single character or a list of two
+characters."
+  '(or character
+       (cons character (cons character null))))
+
+(deftype predicate-name ()
+  '(and symbol
+        (not (member character-ranges string and or not * + ? & ! ~))))
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defvar *expression-kinds*
+    `((character              . (eql character))
+      (character-ranges       . (cons (eql character-ranges)))
+      (string                 . (cons (eql string) (cons array-length null)))
+      (and                    . (cons (eql and)))
+      (or                     . (cons (eql or)))
+      ,@(mapcar (lambda (symbol)
+                  `(,symbol . (cons (eql ,symbol) (cons t null))))
+                '(not * + ? & !))
+      (terminal               . terminal)
+      (nonterminal            . nonterminal)
+      (predicate              . (cons predicate-name (cons (not null) null)))
+      (t                      . t))
+    "Names and corresponding types of acceptable expression
+constructors."))
 
 ;;; RULE REPRESENTATION AND STORAGE
 ;;;
@@ -336,7 +379,7 @@ is not attached to any nonterminal."
   (setf (slot-value rule '%symbol) nil))
 
 (defmethod shared-initialize :after ((rule rule) slots &key)
-  (validate-expression (rule-expression rule)))
+  (check-expression (rule-expression rule)))
 
 (defmethod print-object ((rule rule) stream)
   (print-unreadable-object (rule stream :type t :identity nil)
@@ -915,51 +958,60 @@ inspection."
 
 ;;; EXPRESSION COMPILER & EVALUATOR
 
-(defun invalid-expression-error (expression)
-  (error "Invalid expression: ~S" expression))
+(eval-when (:compile-toplevel)
+  (defmacro expression-case (expression &body clauses)
+    "Similar to
 
-(defun validate-character-range (range)
-  (or
-    (characterp range)
-    (and
-      (consp range)
-      (consp (cdr range))
-      (characterp (car range))
-      (characterp (cadr range))
-      (null (cddr range)))))
+  (cl:typecase EXPRESSION CLAUSES)
 
-(defun validate-expression (expression)
-  (or (typecase expression
-        ((eql character)
-         t)
-        (terminal
-         t)
-        (nonterminal
-         t)
-        (cons
-         (case (car expression)
-           ((and or)
-            (and (every #'validate-expression (cdr expression)) t))
-           ((nil)
-            nil)
-           (string
-            (and (cdr expression) (not (cddr expression))
-                 (typep (second expression) 'array-length)))
+but clause heads designate kinds of expressions instead of types. See
+*EXPRESSION-KINDS*."
+    (let ((available (copy-list *expression-kinds*)))
+      (labels ((type-for-expression-kind (kind)
+                 (if-let ((cell (assoc kind available)))
+                   (progn
+                     (removef available cell)
+                     (cdr cell))
+                   (error "Invalid or duplicate clause: ~S" kind)))
+               (process-clause (clause)
+                 (destructuring-bind (kind &body body) clause
+                   (etypecase kind
+                     (cons
+                      `((or ,@(mapcar #'type-for-expression-kind kind))
+                        ,@body))
+                     (symbol
+                      `(,(type-for-expression-kind kind)
+                        ,@body))))))
+        (let ((clauses (mapcar #'process-clause clauses)))
+          ;; We did not provide clauses for all expression
+          ;; constructors and did not specify a catch-all clause =>
+          ;; error.
+          (when (and (assoc t available) (> (length available) 1))
+            (error "Unhandled expression kinds: ~{~S~^, ~}"
+                   (remove t (mapcar #'car available))))
+          ;; If we did not specify a catch-all clause, insert one
+          ;; which signals INVALID-EXPRESSION-ERROR.
+          (once-only (expression)
+            `(typecase ,expression
+               ,@clauses
+               ,@(when (assoc t available)
+                   `((t (invalid-expression-error ,expression)))))))))))
+
+(defun check-expression (expression)
+  (labels
+      ((rec (expression)
+         (expression-case expression
+           ((character string terminal nonterminal))
            (character-ranges
-            (and (every #'validate-character-range (cdr expression)) t))
-           (t
-            (and (symbolp (car expression))
-                 (cdr expression) (not (cddr expression))
-                 (validate-expression (second expression))))))
-        (t
-         nil))
-      (invalid-expression-error expression)))
+            (unless (every (of-type 'character-range) (rest expression))
+              (invalid-expression-error expression)))
+           ((and or not * + ? & ! predicate)
+            (mapc #'rec (rest expression))))))
+    (rec expression)))
 
 (defun %expression-dependencies (expression seen)
-  (etypecase expression
-    ((member character)
-     seen)
-    (terminal
+  (expression-case expression
+    ((character string character-ranges terminal)
      seen)
     (nonterminal
      (if (member expression seen :test #'eq)
@@ -969,41 +1021,27 @@ inspection."
            (if rule
                (%expression-dependencies (rule-expression rule) seen)
                seen))))
-    (cons
-     (case (car expression)
-       ((string character-ranges)
-        seen)
-       ((and or)
-        (dolist (subexpr (cdr expression) seen)
-          (setf seen (%expression-dependencies subexpr seen))))
-       ((* + ? & !)
-        (%expression-dependencies (second expression) seen))
-       (t
-        (%expression-dependencies (second expression) seen))))))
+    ((and or)
+     (dolist (subexpr (cdr expression) seen)
+       (setf seen (%expression-dependencies subexpr seen))))
+    ((not * + ? & ! predicate)
+     (%expression-dependencies (second expression) seen))))
 
 (defun %expression-direct-dependencies (expression seen)
-  (etypecase expression
-    ((member character)
-     seen)
-    (terminal
+  (expression-case expression
+    ((character string character-ranges terminal)
      seen)
     (nonterminal
      (cons expression seen))
-    (cons
-     (case (car expression)
-       (string
-        seen)
-       ((and or)
-        (dolist (subexpr (cdr expression) seen)
-          (setf seen (%expression-direct-dependencies subexpr seen))))
-       ((* + ? & !)
-        (%expression-direct-dependencies (second expression) seen))
-       (t
-        (%expression-direct-dependencies (second expression) seen))))))
+    ((and or)
+     (dolist (subexpr (cdr expression) seen)
+       (setf seen (%expression-direct-dependencies subexpr seen))))
+    ((not * + ? & ! predicate)
+     (%expression-direct-dependencies (second expression) seen))))
 
 (defun eval-expression (expression text position end)
-  (typecase expression
-    ((eql character)
+  (expression-case expression
+    (character
      (eval-character text position end))
     (terminal
      (if (consp expression)
@@ -1011,73 +1049,47 @@ inspection."
          (eval-terminal (string expression) text position end t)))
     (nonterminal
      (eval-nonterminal expression text position end))
-    (cons
-     (case (car expression)
-       (string
-        (eval-string expression text position end))
-       (and
-        (eval-sequence expression text position end))
-       (or
-        (eval-ordered-choise expression text position end))
-       (not
-        (eval-negation expression text position end))
-       (*
-        (eval-greedy-repetition expression text position end))
-       (+
-        (eval-greedy-positive-repetition expression text position end))
-       (?
-        (eval-optional expression text position end))
-       (&
-        (eval-followed-by expression text position end))
-       (!
-        (eval-not-followed-by expression text position end))
-       (character-ranges
-        (eval-character-ranges expression text position end))
-       (t
-        (if (symbolp (car expression))
-            (eval-semantic-predicate expression text position end)
-            (invalid-expression-error expression)))))
-    (t
-     (invalid-expression-error expression))))
+    (string
+     (eval-string expression text position end))
+    (and
+     (eval-sequence expression text position end))
+    (or
+     (eval-ordered-choise expression text position end))
+    (not
+     (eval-negation expression text position end))
+    (*
+     (eval-greedy-repetition expression text position end))
+    (+
+     (eval-greedy-positive-repetition expression text position end))
+    (?
+     (eval-optional expression text position end))
+    (&
+     (eval-followed-by expression text position end))
+    (!
+     (eval-not-followed-by expression text position end))
+    (character-ranges
+     (eval-character-ranges expression text position end))
+    (predicate
+     (eval-semantic-predicate expression text position end))))
 
 (defun compile-expression (expression)
-  (etypecase expression
-    ((eql character)
-     (compile-character))
-    (terminal
-     (if (consp expression)
-         (compile-terminal (string (second expression)) nil)
-         (compile-terminal (string expression) t)))
-    (nonterminal
-     (compile-nonterminal expression))
-    (cons
-     (case (car expression)
-       (string
-        (compile-string expression))
-       (and
-        (compile-sequence expression))
-       (or
-        (compile-ordered-choise expression))
-       (not
-        (compile-negation expression))
-       (*
-        (compile-greedy-repetition expression))
-       (+
-        (compile-greedy-positive-repetition expression))
-       (?
-        (compile-optional expression))
-       (&
-        (compile-followed-by expression))
-       (!
-        (compile-not-followed-by expression))
-       (character-ranges
-        (compile-character-ranges expression))
-       (t
-        (if (symbolp (car expression))
-            (compile-semantic-predicate expression)
-            (invalid-expression-error expression)))))
-    (t
-     (invalid-expression-error expression))))
+  (expression-case expression
+    (character        (compile-character))
+    (terminal         (if (consp expression)
+                          (compile-terminal (string (second expression)) nil)
+                          (compile-terminal (string expression) t)))
+    (nonterminal      (compile-nonterminal expression))
+    (string           (compile-string expression))
+    (and              (compile-sequence expression))
+    (or               (compile-ordered-choise expression))
+    (not              (compile-negation expression))
+    (*                (compile-greedy-repetition expression))
+    (+                (compile-greedy-positive-repetition expression))
+    (?                (compile-optional expression))
+    (&                (compile-followed-by expression))
+    (!                (compile-not-followed-by expression))
+    (character-ranges (compile-character-ranges expression))
+    (predicate        (compile-semantic-predicate expression))))
 
 ;;; Characters and strings
 
@@ -1490,15 +1502,15 @@ inspection."
     (if (< position end)
         (let ((char (char text position)))
           (if (loop for range in ranges
-                   do (if (characterp range)
-                          (when (char= range char)
-                            (return t))
-                          (when (char<= (first range) char (second range))
-                            (return t))))
-             (make-result
-              :production char
-              :position (1+ position))
-             (oops)))
+                    do (if (characterp range)
+                           (when (char= range char)
+                             (return t))
+                           (when (char<= (first range) char (second range))
+                             (return t))))
+              (make-result
+               :production char
+               :position (1+ position))
+              (oops)))
         (oops))))
 
 (defun eval-character-ranges (expression text position end)
