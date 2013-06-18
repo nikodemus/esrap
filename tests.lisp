@@ -269,7 +269,7 @@
              (multiple-value-list (parse '(or "foo" "bar") "foo"))))
   (is (eq 'foo+ (add-rule 'foo+
                           (make-instance 'rule :expression '(+ "foo")))))
-  (is (equal '("foo" "foo" "foo")
+  (is (equal '(("foo" "foo" "foo") nil)
              (multiple-value-list (parse 'foo+ "foofoofoo"))))
   (is (eq 'decimal
           (add-rule 'decimal
