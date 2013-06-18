@@ -626,30 +626,30 @@ Following OPTIONS can be specified:
                      (set-guard expr nil))
                  (set-guard expr `(lambda () ,expr))))
             ((:constant value)
-             (setf transform `(constantly ,value)))
+             (set-transform `(constantly ,value)))
             ((:concat value)
              (note-deprecated :concat :text)
              (when value
-               (setf transform '#'text/bounds)))
+               (set-transform '#'text/bounds)))
             ((:text value)
              (when value
-               (setf transform '#'text/bounds)))
+               (set-transform '#'text/bounds)))
             ((:identity value)
              (when value
-               (setf transform '#'identity/bounds)))
+               (set-transform '#'identity/bounds)))
             ((:lambda lambda-list &body forms)
              (multiple-value-bind (lambda-list start end ignore)
                  (parse-lambda-list-maybe-containing-&bounds lambda-list)
-               (setf transform
+               (set-transform
                      `(lambda (,@lambda-list ,start ,end)
                         (declare (ignore ,@ignore))
                         ,@forms))))
             ((:function designator)
-             (setf transform `(lambda/bounds (function ,designator))))
+             (set-transform `(lambda/bounds (function ,designator))))
             ((:destructure lambda-list &body forms)
              (multiple-value-bind (lambda-list start end ignore)
                  (parse-lambda-list-maybe-containing-&bounds lambda-list)
-               (setf transform
+               (set-transform
                      (with-gensyms (production)
                        `(lambda (,production ,start ,end)
                           (declare (ignore ,@ignore))
