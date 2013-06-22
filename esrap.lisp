@@ -1033,6 +1033,8 @@ inspection."
         (eval-not-followed-by expression text position end))
        (character-ranges
         (eval-character-ranges expression text position end))
+       (function
+        (eval-terminal-function expression text position end))
        (t
         (if (symbolp (car expression))
             (eval-semantic-predicate expression text position end)
@@ -1072,6 +1074,8 @@ inspection."
         (compile-not-followed-by expression))
        (character-ranges
         (compile-character-ranges expression))
+       (function
+        (compile-terminal-function expression))
        (t
         (if (symbolp (car expression))
             (compile-semantic-predicate expression)
@@ -1140,6 +1144,30 @@ inspection."
   (let ((length (length string)))
     (named-lambda compiled-terminal (text position end)
       (exec-terminal string length text position end case-sensitive-p))))
+
+(defun exec-terminal-function (function text position end)
+  (declare (function function))
+  (multiple-value-bind (production end-position)
+      (funcall function text position end)
+    (if (> end-position position)
+        (make-result
+         :position end-position
+         :production production)
+        (make-failed-parse
+         :expression function
+         :position position))))
+
+(defun eval-terminal-function (expression text position end)
+  (destructuring-bind (_ function) expression
+    (declare (ignore _))
+    (exec-terminal-function (ensure-function function) text position end)))
+
+(defun compile-terminal-function (expression)
+  (destructuring-bind (_ function) expression
+    (declare (ignore _))
+    (let ((function (ensure-function function)))
+      (named-lambda compiled-terminal-function (text position end)
+        (exec-terminal-function function text position end)))))
 
 ;;; Nonterminals
 
