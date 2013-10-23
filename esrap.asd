@@ -22,11 +22,15 @@
 (in-package :esrap-system)
 
 (defsystem :esrap
-  :version "0.9"
+  :version "1.1" ; odd minor version numbers are for unstable versions
   :description "A Packrat / Parsing Grammar / TDPL parser for Common Lisp."
   :licence "MIT"
-  :depends-on (:alexandria :defmacro-enhance :iterate :rutils)
-  :components ((:file "esrap")
+  :depends-on (:alexandria :defmacro-enhance :iterate :rutils :cl-indeterminism)
+  :serial t
+  :components ((:file "package")
+               (:file "conditions")
+               (:file "miscellany")
+               (:file "esrap")
                (:static-file "example-sexp.lisp")
                (:static-file "example-symbol-table.lisp")
                (:static-file "README")))
@@ -34,7 +38,7 @@
 (defsystem :esrap-tests
   :description "Tests for ESRAP."
   :licence "MIT"
-  :depends-on (:esrap :eos)
+  :depends-on (:esrap :fiveam)
   :components ((:file "tests")))
 
 (defmethod perform ((op test-op) (sys (eql (find-system :esrap))))
