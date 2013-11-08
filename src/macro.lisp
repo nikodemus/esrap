@@ -16,29 +16,41 @@
            (setf position new-position)
            result))))
 
-(defmacro!! defrule (name args &body body)
-    (let ((char-reader (get-dispatch-macro-character #\# #\\))
+(defmacro with-esrap-reader-context (&body body)
+  `(let ((char-reader (get-dispatch-macro-character #\# #\\))
           (string-reader (get-macro-character #\")))
       (with-dispatch-macro-character (#\# #\\ (esrap-char-reader char-reader))
         (with-macro-character (#\" (esrap-string-reader string-reader))
           (read-macrolet ((literal-char (esrap-literal-char-reader char-reader))
                           (literal-string (esrap-literal-string-reader string-reader))
                           (character-ranges (esrap-character-ranges char-reader)))
-            (call-next-method)))))
-  (let ((*variable-transformer* (lambda (sym)
-                                  ;; KLUDGE to not parse lambda-lists in defrule args
-                                  (if (equal "CHARACTER" (string sym))
-                                      `(descend-with-rule 'character nil)
-                                      `(descend-with-rule ',sym)))))
-    `(setf (gethash ',name *rules*)
-           ,(macroexpand-all-transforming-undefs `(named-lambda ,(intern (strcat "ESRAP-" name)) (text position end ,@args)
-                                                    (let ((,g!-position position))
-                                                      (declare (ignorable ,g!-position))
-                                                      (symbol-macrolet ((match-start ,g!-position)
-                                                                        (match-end position))
-                                                        (with-cached-result (,name position text ,@args)
-                                                          (values (progn ,@body)
-                                                                  position)))))))))
+            ,@body)))))
+
+(defmacro with-esrap-variable-transformer (&body body)
+  `(let ((*variable-transformer* (lambda (sym)
+                                   ;; KLUDGE to not parse lambda-lists in defrule args
+                                   (if (equal "CHARACTER" (string sym))
+                                       `(descend-with-rule 'character nil)
+                                       `(descend-with-rule ',sym)))))
+     ,@body))
+
+(defun! install-rule (name args body)
+  `(setf (gethash ',name *rules*)
+         ,(macroexpand-all-transforming-undefs
+           `(named-lambda ,(intern (strcat "ESRAP-" name)) (text position end ,@args)
+              (let ((,g!-position position))
+                (declare (ignorable ,g!-position))
+                (symbol-macrolet ((match-start ,g!-position)
+                                  (match-end position))
+                  (with-cached-result (,name position text ,@args)
+                    (values (progn ,@body)
+                            position))))))))
+
+(defmacro!! defrule (name args &body body)
+    (with-esrap-reader-context
+      (call-next-method))
+  (with-esrap-variable-transformer
+    (install-rule name args body)))
 
 (defmacro! make-result (result &optional (length 0))
   ;; We must preserve the semantics, that computation of results occurs before increment of position
