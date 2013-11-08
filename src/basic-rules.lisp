@@ -30,7 +30,10 @@
 (defrule string (string)
   (let ((any-string (any-string (length string))))
     (if (string= any-string string)
-        (make-result any-string))))
+        (make-result any-string)
+        (fail-parse (literal-string "String ~a is not equal to desired string ~a")
+                    any-string
+                    string))))
 
 (defun joinl (joinee lst)
   (format nil (strcat "~{~a~^" joinee "~}") lst))

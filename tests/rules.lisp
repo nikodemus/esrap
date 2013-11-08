@@ -162,6 +162,12 @@
 (defrule spaces ()
   (length (times #\space)))
 
+(defrule three-spaces ()
+  (length (times #\space :exactly 3)))
+
+(defrule upto-three-spaces ()
+  (length (times #\space :upto 3)))
+
 (defrule greedy-pos-spaces ()
   (postimes spaces))
 (defrule greedy-spaces ()
@@ -192,19 +198,27 @@
                  (times (progn separator word)))
       (? separator))))
 
-;; (defparameter dyna-from 3)
-;; (defparameter dyna-to 5)
+(defparameter dyna-from-times 3)
+(defparameter dyna-to-times 5)
 
-;; (defrule dyna-from-to (* dyna-from dyna-to "a")
-;;   (:text t))
+(defrule dyna-from-to ()
+  (text (times "a" :from dyna-from-times :upto dyna-to-times)))
 
-;; (defrule dyna-from-tos (* dyna-from-to))
+(defrule dyna-from-tos ()
+  (times dyna-from-to))
 
-;; (defparameter context :void)
+(defparameter context :void)
 
-;; (defun in-context-p (x)
-;;   (declare (ignore x))
-;;   (and context (not (eql context :void))))
-;; (defrule context (in-context-p ""))
-;; (defrule ooc-word word
-;;   (:constant "out of context word"))
+(defun in-context-p (x)
+  (declare (ignore x))
+  (and context (not (eql context :void))))
+
+(defrule context-sensitive ()
+  (pred #'in-context-p ""))
+(defrule ooc-word ()
+  word
+  (literal-string "out of context word"))
+
+(defrule cond-word ()
+  dyna-from-to
+  word)

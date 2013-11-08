@@ -164,20 +164,19 @@
   (is (equal '(("oofoofoof") 10)
 	     (multiple-value-list (parse 'simple-wrapped "goofoofoof")))))
 
-;; (test dynamic-times
-;;   (is (equal '("aaaaa" "aaa") (parse 'dyna-from-tos "aaaaaaaa")))
-;;   (is (equal '("aaaa" "aaaa") (let ((dyna-to 4))
-;; 				(parse 'dyna-from-tos "aaaaaaaa")))))
+(test dynamic-times
+  (is (equal '("aaaaa" "aaa") (parse 'dyna-from-tos "aaaaaaaa")))
+  (is (equal '("aaaa" "aaaa") (let ((dyna-to-times 4))
+				(parse 'dyna-from-tos "aaaaaaaa")))))
 
-;; (defrule cond-word (cond (dyna-from-to word)))
+(test cond
+  (is (equal "foo" (parse 'cond-word "aaaafoo"))))
 
-;; (test cond
-;;   (is (equal "foo" (parse 'cond-word "aaaafoo")))
-;;   (is (equal "foo" (let ((context t)) (parse '(cond (context word)) "foo"))))
-;;   (is (equal :error-occured (handler-case (parse '(cond (context word)) "foo")
-;; 			      (error () :error-occured))))
-;;   (is (equal "out of context word" (parse '(cond (context word) (t ooc-word))
-;; 					  "foo"))))
+  ;; (is (equal "foo" (let ((context t)) (parse '(cond (context word)) "foo"))))
+  ;; (is (equal :error-occured (handler-case (parse '(cond (context word)) "foo")
+  ;;       		      (error () :error-occured))))
+  ;; (is (equal "out of context word" (parse '(cond (context word) (t ooc-word))
+  ;;       				  "foo"))))
 
 ;; (test followed-by-not-gen
 ;;   (is (equal '("a" nil "b") (parse '(and "a" (-> "b") "b") "ab"))))
