@@ -152,9 +152,10 @@
 ;;              (multiple-value-list (parse '(evenp decimal) "123" :junk-allowed t)))))
 
 
-;; (test ambiguous-greedy-repetitions
-;;   (is (equal '((3) nil) (multiple-value-list (parse 'greedy-spaces "   "))))
-;;   (is (equal '((3) nil) (multiple-value-list (parse 'greedy-pos-spaces "   ")))))
+;; TODO: I dunno, maybe I still should return NIL as a second value if parse succeeded without JUNK-ALLOWED?
+(test ambiguous-greedy-repetitions
+  (is (equal '((3) 3) (multiple-value-list (parse 'greedy-spaces "   "))))
+  (is (equal '((3) 3) (multiple-value-list (parse 'greedy-pos-spaces "   ")))))
 
 
 ;; (test dynamic-wrapping			      

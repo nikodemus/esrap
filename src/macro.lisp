@@ -83,10 +83,14 @@
 (defmacro! times (subexpr &key from upto exactly)
   (flet ((frob (condition)
            `(let (,g!-result)
-              (iter (let ((,g!-position (handler-case (let ((position position))
-                                                        (push ,subexpr ,g!-result)
-                                                        position)
-                                          (simple-esrap-error () (terminate)))))
+              (iter (multiple-value-bind (,g!-subresult ,g!-position)
+                        (handler-case (let ((position position))
+                                        (values ,subexpr position))
+                          (simple-esrap-error () (terminate)))
+                      (if-first-time nil
+                                     (if (equal ,g!-position position)
+                                         (terminate)))
+                      (push ,g!-subresult ,g!-result)
                       (setf position ,g!-position))
                     (finally (if ,condition
                                  (return (make-result (nreverse ,g!-result)))

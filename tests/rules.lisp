@@ -158,12 +158,13 @@
 
 ;; ;; Testing ambiguity when repetitioning possibly empty-string-match
 
-;; (defrule spaces (* #\space)
-;;   (:lambda (lst)
-;;     (length lst)))
+(defrule spaces ()
+  (length (times #\space)))
 
-;; (defrule greedy-pos-spaces (+ spaces))
-;; (defrule greedy-spaces (* spaces))
+(defrule greedy-pos-spaces ()
+  (postimes spaces))
+(defrule greedy-spaces ()
+  (times spaces))
 
 ;; (defparameter separator #\space)
 
