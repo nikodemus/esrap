@@ -154,7 +154,8 @@
 ;;                        (list (cons 0 (cons start end))))))
 ;;       (call-transform))))
 
-;; (defrule character-range (character-ranges (#\a #\b) #\-))
+(defrule character-range ()
+  (character-ranges (#\a #\b) #\-))
 
 ;; ;; Testing ambiguity when repetitioning possibly empty-string-match
 
@@ -166,27 +167,30 @@
 (defrule greedy-spaces ()
   (times spaces))
 
-;; (defparameter separator #\space)
+;; Subtle bug here was caused by the fact, that SEPARATOR variable name
+;; was the same as SEPARATOR rule-name.
+(defparameter separator-char #\space)
 
-;; (defrule simple-prefix (character-ranges (#\a #\z)))
+(defrule simple-prefix ()
+  (character-ranges (#\a #\z)))
 
-;; (defun separator-p (x)
-;;   (and (characterp x) (char= x separator)))
+(defun separator-p (x)
+  (and (characterp x) (char= x separator-char)))
 
-;; (defrule separator (separator-p character))
+(defrule separator ()
+  (pred #'separator-p character))
 
-;; (defrule word (+ (not separator))
-;;   (:text t))
+(defrule not-separator ()
+  (!! separator))
 
-;; (defrule simple-wrapped (wrap simple-prefix
-;; 			      (and word
-;; 				   (* (and separator word))
-;; 				   (? separator)))
-;;   (:wrap-around (let ((separator wrapper))
-;; 		  (call-parser)))
-;;   (:destructure (word rest-words sep)
-;; 		(declare (ignore sep))
-;; 		`(,word ,@(mapcar #'cadr rest-words))))
+(defrule word ()
+  (text (postimes (!! separator))))
+
+(defrule simple-wrapped ()
+  (let ((separator-char simple-prefix))
+    (prog1 (cons word
+                 (times (progn separator word)))
+      (? separator))))
 
 ;; (defparameter dyna-from 3)
 ;; (defparameter dyna-to 5)

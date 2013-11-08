@@ -22,7 +22,8 @@
       (with-dispatch-macro-character (#\# #\\ (esrap-char-reader char-reader))
         (with-macro-character (#\" (esrap-string-reader string-reader))
           (read-macrolet ((literal-char (esrap-literal-char-reader char-reader))
-                          (literal-string (esrap-literal-string-reader string-reader)))
+                          (literal-string (esrap-literal-string-reader string-reader))
+                          (character-ranges (esrap-character-ranges char-reader)))
             (call-next-method)))))
   (let ((*variable-transformer* (lambda (sym)
                                   ;; KLUDGE to not parse lambda-lists in defrule args
@@ -69,7 +70,9 @@
   `(progn (let ((position position))
             (handler-case ,expr
               (simple-esrap-error (e) nil)
-              (:no-error () (fail-parse "Clause under non-consuming negation succeeded."))))
+              (:no-error (result &optional position)
+                (declare (ignore result position))
+                (fail-parse "Clause under non-consuming negation succeeded."))))
           (make-result t 0)))
 
 (defmacro !! (expr)
@@ -77,8 +80,12 @@
   `(progn (let ((position position))
             (handler-case ,expr
               (simple-esrap-error (e) nil)
-              (:no-error () (fail-parse "Clause under non-consuming negation succeeded."))))
-          (make-result (char text position) 1)))
+              (:no-error (result &optional position)
+                (declare (ignore result position))
+                (fail-parse "Clause under consuming negation succeeded."))))
+          (if (equal end position)
+              (fail-parse "Reached EOF while trying to consume character.")
+              (make-result (char text position) 1))))
 
 (defmacro! times (subexpr &key from upto exactly)
   (flet ((frob (condition)

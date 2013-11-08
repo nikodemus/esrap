@@ -38,6 +38,30 @@ are allowed only if JUNK-ALLOWED is true."
     (with-macro-character (#\" string-reader)
       (car (read-list-old stream token)))))
 
+(defun esrap-character-ranges (char-reader)
+  (lambda (stream token)
+    (with-dispatch-macro-character (#\# #\\ char-reader)
+      `(character-ranges ,@(read-list-old stream token)))))
+
+(defmacro! character-ranges (&rest char-specs)
+  (macrolet ((fail ()
+               `(error "Character range specification is either a character or list of 2 characters, but got ~a."
+                       char-spec)))
+    (iter (for char-spec in char-specs)
+          (collect (cond ((characterp char-spec) `((char= ,g!-char ,char-spec) ,g!-char))
+                         ((consp char-spec)
+                          (destructuring-bind (start-char end-char) char-spec
+                            (if (and (characterp start-char)
+                                     (characterp end-char))
+                                `((and (>= (char-code ,g!-char) ,(char-code start-char))
+                                       (<= (char-code ,g!-char) ,(char-code end-char)))
+                                  ,g!-char)
+                                (fail))))
+                         (t (fail)))
+            into res)
+          (finally (return `(let ((,g!-char (descend-with-rule 'character nil)))
+                              (cond ,@res
+                                    (t (fail-parse "Character ~s does not belong to specified range" ,g!-char)))))))))
 
 (defvar *indentation-hint-table* nil)
 

@@ -158,11 +158,11 @@
   (is (equal '((3) 3) (multiple-value-list (parse 'greedy-pos-spaces "   ")))))
 
 
-;; (test dynamic-wrapping			      
-;;   (is (equal '(("oo" "oo" "oo") nil)
-;; 	     (multiple-value-list (parse 'simple-wrapped "foofoofoof"))))
-;;   (is (equal '(("oofoofoof") nil)
-;; 	     (multiple-value-list (parse 'simple-wrapped "goofoofoof")))))
+(test dynamic-wrapping			      
+  (is (equal '(("oo" "oo" "oo") 10)
+	     (multiple-value-list (parse 'simple-wrapped "foofoofoof"))))
+  (is (equal '(("oofoofoof") 10)
+	     (multiple-value-list (parse 'simple-wrapped "goofoofoof")))))
 
 ;; (test dynamic-times
 ;;   (is (equal '("aaaaa" "aaa") (parse 'dyna-from-tos "aaaaaaaa")))

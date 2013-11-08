@@ -11,7 +11,7 @@
   (:shadowing-import-from #:rutils.string #:strcat)
   (:export
    #:enable-read-macro-tokens #:disable-read-macro-tokens
-   #:! #:? #:& #:~ #:<- #:-> #:!! #:times #:postimes #:pred #:progm #:cond-parse
+   #:! #:? #:& #:~ #:<- #:-> #:!! #:times #:postimes #:pred #:progm #:cond-parse #:character-ranges
    #:match-start #:match-end
    #:literal-string #:literal-char
    #:register-context
