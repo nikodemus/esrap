@@ -87,17 +87,17 @@
           (cons int list)))))
 
 (defrule single-token/bounds.1 ()
-  (format nil "~A[~S-~S]"
+  (format nil (literal-string "~A[~S-~S]")
           (text (postimes (pred #'not-space character)))
-          start
-          end))
+          match-start
+          match-end))
 
 (defrule single-token/bounds.2 ()
-  (format nil "~C~A(~S-~S)"
+  (format nil (literal-string "~C~A(~S-~S)")
           (pred #'not-space character)
-          (times (pred #'not-space character))
-          start
-          end))
+          (text (times (pred #'not-space character)))
+          match-start
+          match-end))
 
 (defrule tokens/bounds.1 ()
   (let ((match (progn (? whitespace)

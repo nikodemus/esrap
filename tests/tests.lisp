@@ -34,17 +34,17 @@
   (is (equal '(123 45 6789 0) (parse 'list-of-integers "123, 45  ,   6789, 0")))
   (is (equal '(123 45 6789 0) (parse 'list-of-integers "  123 ,45,6789, 0  "))))
 
-;; (test bounds.1
-;;   (is (equal '("foo[0-3]")
-;;              (parse 'tokens/bounds.1 "foo")))
-;;   (is (equal '("foo[0-3]" "bar[4-7]" "quux[11-15]")
-;;              (parse 'tokens/bounds.1 "foo bar    quux"))))
+(test bounds.1
+  (is (equal '("foo[0-3]")
+             (parse 'tokens/bounds.1 "foo")))
+  (is (equal '("foo[0-3]" "bar[4-7]" "quux[11-15]")
+             (parse 'tokens/bounds.1 "foo bar    quux"))))
 
-;; (test bounds.2
-;;   (is (equal '("foo(0-3)")
-;;              (parse 'tokens/bounds.2 "foo")))
-;;   (is (equal '("foo(0-3)" "bar(4-7)" "quux(11-15)")
-;;              (parse 'tokens/bounds.2 "foo bar    quux"))))
+(test bounds.2
+  (is (equal '("foo(0-3)")
+             (parse 'tokens/bounds.2 "foo")))
+  (is (equal '("foo(0-3)" "bar(4-7)" "quux(11-15)")
+             (parse 'tokens/bounds.2 "foo bar    quux"))))
 
 ;; (test condition.1
 ;;   "Test signaling of `esrap-simple-parse-error' conditions for failed
