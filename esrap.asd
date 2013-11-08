@@ -1,20 +1,9 @@
-;;;;  Copyright (c) 2007-2013 Nikodemus Siivola <nikodemus@random-state.net.net>
-;;;;
-;;;;  Permission is hereby granted, free of charge, to any person
-;;;;  obtaining a copy of this software and associated documentation files
-;;;;  (the "Software"), to deal in the Software without restriction,
-;;;;  including without limitation the rights to use, copy, modify, merge,
-;;;;  publish, distribute, sublicense, and/or sell copies of the Software,
-;;;;  and to permit persons to whom the Software is furnished to do so,
-;;;;  subject to the following conditions:
-;;;;
-;;;;  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-;;;;  EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-;;;;  MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-;;;;  IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-;;;;  CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-;;;;  TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
-;;;;  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+;;;; A packrat parser, implemented without duplication of common lisp code-walker.
+
+;;;; Heavily based on initial work of Nikodemus Siivola (https://github.com/nikodemus/esrap)
+;;;; Most of the code is, however, rewritten.
+
+;;;; For licence details, see COPYING
 
 (defpackage :esrap-system
   (:use :cl :asdf))
@@ -24,22 +13,33 @@
 (defsystem :esrap
   :version "1.1" ; odd minor version numbers are for unstable versions
   :description "A Packrat / Parsing Grammar / TDPL parser for Common Lisp."
-  :licence "MIT"
-  :depends-on (:alexandria :defmacro-enhance :iterate :rutils :cl-indeterminism)
+  :licence "GPL"
+  :depends-on (:alexandria :defmacro-enhance :iterate :rutils :cl-indeterminism :cl-read-macro-tokens)
   :serial t
-  :components ((:file "package")
-               (:file "conditions")
-               (:file "miscellany")
-               (:file "esrap")
+  :components ((:module "src"
+                        :pathname "src/"
+                        :serial t
+                        :components ((:file "package")
+                                     (:file "conditions")
+                                     (:file "miscellany")
+                                     (:file "memoization")
+                                     (:file "rule-storage")
+                                     (:file "macro")
+                                     (:file "esrap")
+                                     (:file "basic-rules")))
                (:static-file "example-sexp.lisp")
                (:static-file "example-symbol-table.lisp")
                (:static-file "README")))
 
 (defsystem :esrap-tests
   :description "Tests for ESRAP."
-  :licence "MIT"
-  :depends-on (:esrap :fiveam)
-  :components ((:file "tests")))
+  :licence "GPL"
+  :depends-on (#:esrap #:fiveam #:cl-interpol)
+  :serial t
+  :pathname "tests/"
+  :components ((:file "package")
+               (:file "rules")
+               (:file "tests")))
 
 (defmethod perform ((op test-op) (sys (eql (find-system :esrap))))
   (load-system :esrap-tests)

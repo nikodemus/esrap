@@ -1,5 +1,10 @@
 ;;;; conditions.lisp
 
+;;;; This is a part of esrap-liquid TDPL for Common Lisp
+;;;; Alexander Popolitov, 2013
+;;;; For licence, see COPYING
+
+
 (in-package :esrap)
 
 (define-condition esrap-error (parse-error)
@@ -72,7 +77,6 @@ the error occurred."))
 (defmacro fail-parse (&optional (reason "No particular reason.") &rest args)
   `(let ((reason (apply #'format `(nil ,,reason ,,@args))))
      (simple-esrap-error text position reason "~a~%" reason)))
-
 
 (define-condition left-recursion (esrap-error)
   ((nonterminal :initarg :nonterminal :initform nil :reader left-recursion-nonterminal)

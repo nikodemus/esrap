@@ -1,4 +1,8 @@
-;;; miscellany.lisp
+;;;; miscellany.lisp
+
+;;;; This is a part of esrap-liquid TDPL for Common Lisp
+;;;; Alexander Popolitov, 2013
+;;;; For licence, see COPYING
 
 (in-package :esrap)
 
