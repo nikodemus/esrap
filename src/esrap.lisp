@@ -8,20 +8,31 @@
 
 ;;; MAIN INTERFACE
 
-(defun parse (expression text &key (start 0) end junk-allowed)
+(defun! parse (expression text &key (start 0) end junk-allowed)
   "Parses TEXT using EXPRESSION from START to END. Incomplete parses
 are allowed only if JUNK-ALLOWED is true."
-  ;; There is no backtracking in the toplevel expression -- so there's
-  ;; no point in compiling it as it will be executed only once -- unless
-  ;; it's a constant, for which we have a compiler-macro.
-  (let ((end (or end (length text)))
-        (position start)
-        (*cache* (make-cache)))
-    (let ((result (descend-with-rule expression)))
-      (if (and (not junk-allowed)
-               (not (equal end position)))
-          (fail-parse "Didnt make it to the end of the text")
-          (values result position)))))
+  (unwind-protect (progn (setf (gethash g!-tmp-rule *rules*)
+                               (funcall (compile nil `(lambda ()
+                                                        ,(with-esrap-variable-transformer
+                                                          (make-rule-lambda 'esrap-tmp-rule ()
+                                                                            (list expression)
+                                                                            :null))))))
+                         ;; (format t "rule hash: ~a" (hash->assoc *rules*))
+                         (let ((end (or end (length text)))
+                               (position start)
+                               (*cache* (make-cache)))
+                           (let ((result (descend-with-rule g!-tmp-rule)))
+                             (if (and (not junk-allowed)
+                                      (not (equal end position)))
+                                 (fail-parse "Didnt make it to the end of the text")
+                                 (values result position)))))
+    (remhash g!-tmp-rule *rules*)))
+
+(define-read-macro parse
+  (let ((expression (with-esrap-reader-context
+                      (read stream t nil t))))
+    `(parse ,expression ,@(read-list-old stream token))))
+
 
 (defun esrap-char-reader (char-reader)
   (lambda (stream char subchar)

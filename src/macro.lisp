@@ -34,23 +34,24 @@
                                        `(descend-with-rule ',sym)))))
      ,@body))
 
-(defun! install-rule (name args body)
-  `(setf (gethash ',name *rules*)
-         ,(macroexpand-all-transforming-undefs
-           `(named-lambda ,(intern (strcat "ESRAP-" name)) (text position end ,@args)
-              (let ((,g!-position position))
-                (declare (ignorable ,g!-position))
-                (symbol-macrolet ((match-start ,g!-position)
-                                  (match-end position))
-                  (with-cached-result (,name position text ,@args)
-                    (values (progn ,@body)
-                            position))))))))
+(defun! make-rule-lambda (name args body &optional (env :current))
+  (macroexpand-all-transforming-undefs
+   `(named-lambda ,(intern (strcat "ESRAP-" name)) (text position end ,@args)
+      (let ((,g!-position position))
+        (declare (ignorable ,g!-position))
+        (symbol-macrolet ((match-start ,g!-position)
+                          (match-end position))
+          (with-cached-result (,name position text ,@args)
+            (values (progn ,@body)
+                    position)))))
+   :o!-env env))
 
 (defmacro!! defrule (name args &body body)
     (with-esrap-reader-context
       (call-next-method))
   (with-esrap-variable-transformer
-    (install-rule name args body)))
+    `(setf (gethash ',name *rules*)
+           ,(make-rule-lambda name args body))))
 
 (defmacro! make-result (result &optional (length 0))
   ;; We must preserve the semantics, that computation of results occurs before increment of position
