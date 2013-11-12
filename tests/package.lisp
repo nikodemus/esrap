@@ -7,12 +7,12 @@
 
 (in-package :cl-user)
 
-(defpackage :esrap-tests
-  (:use :alexandria :cl :esrap :fiveam)
-  (:shadowing-import-from :esrap "!" "!!")
+(defpackage :esrap-liquid-tests
+  (:use :alexandria :cl :esrap-liquid :fiveam)
+  (:shadowing-import-from :esrap-liquid "!" "!!")
   (:export #:run-tests))
 
-(in-package :esrap-tests)
+(in-package :esrap-liquid-tests)
 
 (defun run-tests ()
   (let ((results (run 'esrap)))

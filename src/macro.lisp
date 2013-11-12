@@ -4,7 +4,7 @@
 ;;;; Alexander Popolitov, 2013
 ;;;; For licence, see COPYING
 
-(in-package #:esrap)
+(in-package #:esrap-liquid)
 
 (defmacro! descend-with-rule (o!-sym &rest args)
   `(multiple-value-bind (,g!-it ,g!-got) (gethash ,o!-sym *rules*)

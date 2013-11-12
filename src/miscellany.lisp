@@ -4,7 +4,7 @@
 ;;;; Alexander Popolitov, 2013
 ;;;; For licence, see COPYING
 
-(in-package :esrap)
+(in-package :esrap-liquid)
 
 (defun text (&rest arguments)
   "Arguments must be strings, or lists whose leaves are strings.

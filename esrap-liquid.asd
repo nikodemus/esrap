@@ -5,12 +5,12 @@
 
 ;;;; For licence details, see COPYING
 
-(defpackage :esrap-system
+(defpackage :esrap-liquid-system
   (:use :cl :asdf))
 
-(in-package :esrap-system)
+(in-package :esrap-liquid-system)
 
-(defsystem :esrap
+(defsystem :esrap-liquid
   :version "1.1" ; odd minor version numbers are for unstable versions
   :description "A Packrat / Parsing Grammar / TDPL parser for Common Lisp."
   :licence "GPL"
@@ -31,16 +31,16 @@
                (:static-file "example-symbol-table.lisp")
                (:static-file "README")))
 
-(defsystem :esrap-tests
-  :description "Tests for ESRAP."
+(defsystem :esrap-liquid-tests
+  :description "Tests for ESRAP-LIQUID."
   :licence "GPL"
-  :depends-on (#:esrap #:fiveam #:cl-interpol)
+  :depends-on (#:esrap-liquid #:fiveam #:cl-interpol)
   :serial t
   :pathname "tests/"
   :components ((:file "package")
                (:file "rules")
                (:file "tests")))
 
-(defmethod perform ((op test-op) (sys (eql (find-system :esrap))))
+(defmethod perform ((op test-op) (sys (eql (find-system :esrap-liquid))))
   (load-system :esrap-tests)
-  (funcall (intern "RUN-TESTS" :esrap-tests)))
+  (funcall (intern "RUN-TESTS" :esrap-liquid-tests)))

@@ -4,7 +4,7 @@
 ;;;; Alexander Popolitov, 2013
 ;;;; For licence, see COPYING
 
-(in-package :esrap)
+(in-package :esrap-liquid)
 
 
 ;;; RULE REPRESENTATION AND STORAGE

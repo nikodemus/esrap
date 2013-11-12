@@ -6,7 +6,7 @@
 
 (in-package #:cl-user)
 
-(defpackage :esrap
+(defpackage :esrap-liquid
   (:use #:cl #:alexandria #:defmacro-enhance #:iterate #:cl-indeterminism #:cl-read-macro-tokens)
   (:shadowing-import-from #:rutils.string #:strcat)
   (:export

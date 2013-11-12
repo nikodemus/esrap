@@ -4,7 +4,7 @@
 ;;;; Alexander Popolitov, 2013
 ;;;; For licence, see COPYING
 
-(in-package :esrap-tests)
+(in-package :esrap-liquid-tests)
 
 (enable-read-macro-tokens)
 (cl-interpol:enable-interpol-syntax)

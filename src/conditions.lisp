@@ -5,7 +5,7 @@
 ;;;; For licence, see COPYING
 
 
-(in-package :esrap)
+(in-package :esrap-liquid)
 
 (define-condition esrap-error (parse-error)
   ((text :initarg :text :initform nil :reader esrap-error-text)
