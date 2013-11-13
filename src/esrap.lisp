@@ -21,11 +21,15 @@ are allowed only if JUNK-ALLOWED is true."
                          (let ((end (or end (length text)))
                                (position start)
                                (*cache* (make-cache)))
-                           (let ((result (descend-with-rule g!-tmp-rule)))
-                             (if (and (not junk-allowed)
-                                      (not (equal end position)))
-                                 (fail-parse "Didnt make it to the end of the text")
-                                 (values result position)))))
+                           (handler-case (let ((result (descend-with-rule g!-tmp-rule)))
+                                           (if (and (not junk-allowed)
+                                                    (not (equal end position)))
+                                               (fail-parse "Didnt make it to the end of the text")
+                                               (values result position)))
+                             (simple-esrap-error (e)
+                               (if junk-allowed
+                                   (values nil start)
+                                   (error e))))))
     (remhash g!-tmp-rule *rules*)))
 
 (define-read-macro parse

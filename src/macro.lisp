@@ -8,11 +8,11 @@
 
 (defmacro! descend-with-rule (o!-sym &rest args)
   `(multiple-value-bind (,g!-it ,g!-got) (gethash ,o!-sym *rules*)
-     (format t "sym: ~a ~a~%" ,o!-sym position)
+     ;; (format t "sym: ~a ~a~%" ,o!-sym position)
      (if (not ,g!-got)
          (error "Undefined rule: ~s" ,o!-sym)
          (multiple-value-bind (result new-position) (funcall ,g!-it text position end ,@args)
-           (format t "position before setting ~a, after setting would be ~a" position new-position)
+           ;; (format t "position before setting ~a, after setting would be ~a" position new-position)
            (setf position new-position)
            result))))
 
@@ -67,6 +67,7 @@
          (let (,g!-parse-errors)
            ,@(mapcar (lambda (clause)
                        `(handler-case (let ((position position))
+                                        ;; (format t "Im in ordered choice~%")
                                         (return-from ,g!-ordered-choice (values ,clause position)))
                           (simple-esrap-error (e) (push e ,g!-parse-errors))))
                      clauses)
@@ -82,7 +83,7 @@
   "Succeeds, whenever parsing of EXPR fails. Does not consume."
   `(progn (let ((position position))
             (handler-case ,expr
-              (simple-esrap-error (e) nil)
+              (simple-esrap-error () nil)
               (:no-error (result &optional position)
                 (declare (ignore result position))
                 (fail-parse "Clause under non-consuming negation succeeded."))))
@@ -92,7 +93,7 @@
   "Succeeds, whenever parsing of EXPR fails. Consumes, assumes than EXPR parses just one character."
   `(progn (let ((position position))
             (handler-case ,expr
-              (simple-esrap-error (e) nil)
+              (simple-esrap-error () nil)
               (:no-error (result &optional position)
                 (declare (ignore result position))
                 (fail-parse "Clause under consuming negation succeeded."))))
@@ -164,13 +165,13 @@
 (defmacro! <- (subexpr)
   (if (and (symbolp subexpr) (equal (string subexpr) "SOF"))
       `(if (equal 0 position)
-           (make-result t)
+           (make-result nil)
            (fail-parse "not at start-of-file"))
       `(let ((,g!-old-position position)
              (position (1- position)))
          (let ((,g!-result ,subexpr))
            (if (equal ,g!-old-position position)
-               (make-result ,g!-result)
+               (make-result nil)
                (fail-parse "Parsing of subexpr took more than 1 char."))))))
 
 (defmacro! cond-parse (&rest clauses)

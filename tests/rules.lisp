@@ -120,39 +120,28 @@
 (defrule left-recursion ()
   (progn left-recursion "l"))
 
-;; (declaim (special *depth*))
-;; (defvar *depth* nil)
+(declaim (special *depth*))
+(defvar *depth* nil)
 
-;; (defrule around/inner
-;;     (+ (alpha-char-p character))
-;;   (:text t))
+(defrule around/inner ()
+  (text (postimes (pred #'alpha-char-p character))))
 
-;; (defrule around.1
-;;     (or around/inner
-;;         (and #\{ around.1 #\}))
-;;   (:lambda (thing)
-;;     (if (stringp thing)
-;;         (cons *depth* thing)
-;;         (second thing)))
-;;   (:around ()
-;;     (let ((*depth* (if *depth*
-;;                        (cons (1+ (first *depth*)) *depth*)
-;;                        (list 0))))
-;;       (call-transform))))
+(defrule around.1 ()
+  (let ((*depth* (if *depth*
+                     (cons (1+ (first *depth*)) *depth*)
+                     (list 0))))
+    (let ((it (|| around/inner
+                  (list #\{ around.1 #\}))))
+      (if (stringp it)
+          (cons *depth* it)
+          (second it)))))
 
-;; (defrule around.2
-;;     (or around/inner
-;;         (and #\{ around.2 #\}))
-;;   (:lambda (thing)
-;;     (if (stringp thing)
-;;         (cons *depth* thing)
-;;         (second thing)))
-;;   (:around (&bounds start end)
-;;     (let ((*depth* (if *depth*
-;;                        (cons (cons (1+ (car (first *depth*))) (cons start end))
-;;                              *depth*)
-;;                        (list (cons 0 (cons start end))))))
-;;       (call-transform))))
+(defrule around.2 ()
+  (let ((it (|| around/inner
+                (progm #\{ around.2 #\}))))
+    (if (stringp it)
+        `(((0 . (,match-start . ,match-end))) . ,it)
+        `(((,(1+ (caaar it)) . (,match-start . ,match-end)) ,. (car it)) . ,(cdr it)))))
 
 (defrule character-range ()
   (character-ranges (#\a #\b) #\-))
@@ -222,3 +211,11 @@
 (defrule cond-word ()
   dyna-from-to
   word)
+
+(defrule foo+ ()
+  (postimes "foo"))
+
+(defrule decimal ()
+  (parse-integer (format nil (literal-string "~{~A~}")
+                         (postimes (|| "0" "1" "2" "3" "4" "5" "6" "7" "8" "9")))))
+

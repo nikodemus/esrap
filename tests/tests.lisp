@@ -73,83 +73,69 @@
 ;;                                    "Encountered at"))
 ;;       (parse 'list-of-integers "1, "))))
 
-;; (test condition.2
-;;   "Test signaling of `left-recursion' condition."
-;;   (signals (left-recursion)
-;;     (parse 'left-recursion "l"))
-;;   (handler-case (parse 'left-recursion "l")
-;;     (left-recursion (condition)
-;;       (is (string= (esrap-error-text condition) "l"))
-;;       (is (= (esrap-error-position condition) 0))
-;;       (is (eq (left-recursion-nonterminal condition)
-;;               'left-recursion))
-;;       (is (equal (left-recursion-path condition)
-;;                  '(left-recursion left-recursion))))))
+(test condition.2
+  "Test signaling of `left-recursion' condition."
+  (signals (esrap-liquid::left-recursion)
+    (parse 'left-recursion "l"))
+  (handler-case (parse 'left-recursion "l")
+    (esrap-liquid::left-recursion (condition)
+      (is (string= (esrap-liquid::esrap-error-text condition) "l"))
+      (is (= (esrap-liquid::esrap-error-position condition) 0))
+      (is (eq (esrap-liquid::left-recursion-nonterminal condition)
+              'left-recursion))
+      (is (equal (esrap-liquid::left-recursion-path condition)
+                 '(esrap-liquid::esrap-tmp-rule left-recursion left-recursion))))))
 
-;; (test negation
-;;   "Test negation in rules."
-;;   (let* ((text "FooBazBar")
-;;          (t1c (text (parse '(+ (not "Baz")) text :junk-allowed t)))
-;;          (t1e (text (parse (identity '(+ (not "Baz"))) text :junk-allowed t)))
-;;          (t2c (text (parse '(+ (not "Bar")) text :junk-allowed t)))
-;;          (t2e (text (parse (identity '(+ (not "Bar"))) text :junk-allowed t)))
-;;          (t3c (text (parse '(+ (not (or "Bar" "Baz"))) text :junk-allowed t)))
-;;          (t3e (text (parse (identity '(+ (not (or "Bar" "Baz")))) text :junk-allowed t))))
-;;     (is (equal "Foo" t1c))
-;;     (is (equal "Foo" t1e))
-;;     (is (equal "FooBaz" t2c))
-;;     (is (equal "FooBaz" t2e))
-;;     (is (equal "Foo" t3c))
-;;     (is (equal "Foo" t3e))))
+(test negation
+  "Test negation in rules."
+  (let* ((text "FooBazBar")
+         (t1c (text (parse '(postimes (!! "Baz")) text :junk-allowed t)))
+         (t1e (text (parse '(pred #'identity (postimes (!! "Baz"))) text :junk-allowed t)))
+         (t2c (text (parse '(postimes (!! "Bar")) text :junk-allowed t)))
+         (t2e (text (parse '(pred #'identity (postimes (!! "Bar"))) text :junk-allowed t)))
+         (t3c (text (parse '(postimes (!! (|| "Bar" "Baz"))) text :junk-allowed t)))
+         (t3e (text (parse '(pred #'identity (postimes (!! (|| "Bar" "Baz")))) text :junk-allowed t))))
+    (is (equal "Foo" t1c))
+    (is (equal "Foo" t1e))
+    (is (equal "FooBaz" t2c))
+    (is (equal "FooBaz" t2e))
+    (is (equal "Foo" t3c))
+    (is (equal "Foo" t3e))))
 
-;; (test around.1
-;;   "Test executing code around the transform of a rule."
-;;   (macrolet ((test-case (input expected)
-;;                `(is (equal (parse 'around.1 ,input) ,expected))))
-;;     (test-case "foo"     '((0) . "foo"))
-;;     (test-case "{bar}"   '((1 0) . "bar"))
-;;     (test-case "{{baz}}" '((2 1 0) . "baz"))))
 
-;; (test around.2
-;;   "Test executing code around the transform of a rule."
-;;   (macrolet ((test-case (input expected)
-;;                `(is (equal (parse 'around.2 ,input) ,expected))))
-;;     (test-case "foo"     '(((0 . (0 . 3)))
-;;                            . "foo"))
-;;     (test-case "{bar}"   '(((1 . (1 . 4))
-;;                             (0 . (0 . 5)))
-;;                            . "bar"))
-;;     (test-case "{{baz}}" '(((2 . (2 . 5))
-;;                             (1 . (1 . 6))
-;;                             (0 . (0 . 7)))
-;;                            . "baz"))))
+(test around.1 "Test executing code around the transform of a rule."
+      (is (equal '((0) . "foo") (parse 'around.1 "foo")))
+      (is (equal '((1 0) . "bar") (parse 'around.1 "{bar}")))
+      (is (equal '((2 1 0) . "baz") (parse 'around.1 "{{baz}}"))))
 
-;; (test character-range-test
-;;   (is (equal '(#\a #\b) (parse '(* (character-ranges (#\a #\z) #\-)) "ab" :junk-allowed t)))
-;;   (is (equal '(#\a #\b) (parse '(* (character-ranges (#\a #\z) #\-)) "ab1" :junk-allowed t)))
-;;   (is (equal '(#\a #\b #\-) (parse '(* (character-ranges (#\a #\z) #\-)) "ab-" :junk-allowed t)))
-;;   (is (not (parse '(* (character-ranges (#\a #\z) #\-)) "AB-" :junk-allowed t)))
-;;   (is (not (parse '(* (character-ranges (#\a #\z) #\-)) "ZY-" :junk-allowed t)))
-;;   (is (equal '(#\a #\b #\-) (parse '(* character-range) "ab-cd" :junk-allowed t))))
+(test around.2
+  "Test executing code around the transform of a rule."
+  (is (equal '(((0 . (0 . 3))) . "foo") (parse 'around.2 "foo")))
+  (is (equal '(((1 . (0 . 5))
+                (0 . (1 . 4))) . "bar") (parse 'around.2 "{bar}")))
+  (is (equal '(((2 . (0 . 7))
+                (1 . (1 . 6))
+                (0 . (2 . 5)))
+               . "baz") (parse 'around.2 "{{baz}}"))))
 
-;; (test examples-from-readme-test
-;;   (is (equal '("foo" nil)
-;;              (multiple-value-list (parse '(or "foo" "bar") "foo"))))
-;;   (is (eq 'foo+ (add-rule 'foo+
-;;                           (make-instance 'rule :expression '(+ "foo")))))
-;;   (is (equal '(("foo" "foo" "foo") nil)
-;;              (multiple-value-list (parse 'foo+ "foofoofoo"))))
-;;   (is (eq 'decimal
-;;           (add-rule 'decimal
-;;                     (make-instance 'rule
-;;                                    :expression `(+ (or "0" "1" "2" "3" "4" "5" "6" "7"
-;;                                                        "8" "9"))
-;;                                    :transform (lambda (list start end)
-;;                                                 (declare (ignore start end))
-;;                                                 (parse-integer (format nil "~{~A~}" list)))))))
-;;   (is (eql 123 (parse '(oddp decimal) "123")))
-;;   (is (equal '(nil 0)
-;;              (multiple-value-list (parse '(evenp decimal) "123" :junk-allowed t)))))
+(test character-range-test
+  (is (equal '(#\a #\b) (parse '(times (character-ranges (#\a #\z) #\-)) "ab" :junk-allowed t)))
+  (is (equal '(#\a #\b) (parse '(times (character-ranges (#\a #\z) #\-)) "ab1" :junk-allowed t)))
+  (is (equal '(#\a #\b #\-) (parse '(times (character-ranges (#\a #\z) #\-)) "ab-" :junk-allowed t)))
+  (is (equal nil (parse '(times (character-ranges (#\a #\z) #\-)) "AB-" :junk-allowed t)))
+  (is (equal nil (parse '(times (character-ranges (#\a #\z) #\-)) "ZY-" :junk-allowed t)))
+  (is (equal '(#\a #\b #\-) (parse '(times character-range) "ab-cd" :junk-allowed t))))
+
+
+(test examples-from-readme-test
+  (is (equal '("foo" 3)
+             (multiple-value-list (parse '(|| "foo" "bar") "foo"))))
+  (is (equal '(("foo" "foo" "foo") 9)
+             (multiple-value-list (parse 'foo+ "foofoofoo"))))
+  (is (eql 123 (parse '(pred #'oddp decimal) "123")))
+  (is (equal '(nil 0)
+             (multiple-value-list (parse '(pred #'evenp decimal) "123" :junk-allowed t)))))
+
 
 
 ;; TODO: I dunno, maybe I still should return NIL as a second value if parse succeeded without JUNK-ALLOWED?
@@ -170,20 +156,17 @@
 				(parse 'dyna-from-tos "aaaaaaaa")))))
 
 (test cond
-  (is (equal "foo" (parse 'cond-word "aaaafoo"))))
+  (is (equal "foo" (parse 'cond-word "aaaafoo")))
+  (is (equal "foo" (let ((context t)) (parse '(progn context-sensitive word) "foo"))))
+  (is (equal :error-occured (handler-case (parse '(progn context-sensitive word) "foo")
+                              (error () :error-occured))))
+  (is (equal "out of context word" (parse '(|| (progn context-sensitive word)
+                                            ooc-word)
+         				  "foo"))))
 
-  ;; (is (equal "foo" (let ((context t)) (parse '(cond (context word)) "foo"))))
-  ;; (is (equal :error-occured (handler-case (parse '(cond (context word)) "foo")
-  ;;       		      (error () :error-occured))))
-  ;; (is (equal "out of context word" (parse '(cond (context word) (t ooc-word))
-  ;;       				  "foo"))))
+(test followed-by-not-gen
+  (is (equal '("a" nil "b") (parse '(list "a" (-> "b") "b") "ab"))))
 
-;; (test followed-by-not-gen
-;;   (is (equal '("a" nil "b") (parse '(and "a" (-> "b") "b") "ab"))))
-
-;; (test preceded-by-not-gen
-;;   (is (equal '("a" nil "b") (parse '(and "a" (<- "a") "b") "ab"))))
-
-;; (test on-the-fly-tagging
-;;   (is (equal '(:simple-tag "aaa") (parse '(tag :simple-tag "aaa") "aaa"))))
+(test preceded-by-not-gen
+  (is (equal '("a" nil "b") (parse '(list "a" (<- "a") "b") "ab"))))
 
