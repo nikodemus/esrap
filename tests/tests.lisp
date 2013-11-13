@@ -46,32 +46,32 @@
   (is (equal '("foo(0-3)" "bar(4-7)" "quux(11-15)")
              (parse 'tokens/bounds.2 "foo bar    quux"))))
 
-;; (test condition.1
-;;   "Test signaling of `esrap-simple-parse-error' conditions for failed
-;;    parses."
-;;   (macrolet
-;;       ((signals-esrap-error ((input position &optional messages) &body body)
-;;          `(progn
-;;             (signals (esrap-error)
-;;               ,@body)
-;;             (handler-case (progn ,@body)
-;;               (esrap-error (condition)
-;;                 (is (string= (esrap-error-text condition) ,input))
-;;                 (is (= (esrap-error-position condition) ,position))
-;;                 ,@(when messages
-;;                     `((let ((report (princ-to-string condition)))
-;;                         ,@(mapcar (lambda (message)
-;;                                     `(is (search ,message report)))
-;;                                   (ensure-list messages))))))))))
-;;     (signals-esrap-error ("" 0 ("Could not parse subexpression"
-;;                                 "Encountered at"))
-;;       (parse 'integer ""))
-;;     (signals-esrap-error ("123foo" 3 ("Could not parse subexpression"
-;;                                       "Encountered at"))
-;;       (parse 'integer "123foo"))
-;;     (signals-esrap-error ("1, " 1 ("Incomplete parse."
-;;                                    "Encountered at"))
-;;       (parse 'list-of-integers "1, "))))
+(defmacro signals-esrap-error ((input position &optional messages) &body body)
+  `(progn
+     (signals (esrap-liquid::esrap-error)
+       ,@body)
+     (handler-case (progn ,@body)
+       (esrap-liquid::esrap-error (condition)
+         (is (string= (esrap-liquid::esrap-error-text condition) ,input))
+         (is (= (esrap-liquid::esrap-error-position condition) ,position))
+         ,@(when messages
+                 `((let ((report (princ-to-string condition)))
+                     ,@(mapcar (lambda (message)
+                                 `(is (search ,message report)))
+                               (ensure-list messages)))))))))
+
+(test condition.1
+  "Test signaling of `esrap-simple-parse-error' conditions for failed
+   parses."
+  (signals-esrap-error ("" 0 ("Greedy repetition failed"
+                              "Encountered at"))
+                       (parse 'integer ""))
+  (signals-esrap-error ("123foo" 3 ("Clause under non-consuming negation succeeded"
+                                    "Encountered at"))
+                       (parse 'integer "123foo"))
+  (signals-esrap-error ("1, " 1 ("Didnt make it to the end of the text"
+                                 "Encountered at"))
+                       (parse 'list-of-integers "1, ")))
 
 (test condition.2
   "Test signaling of `left-recursion' condition."
