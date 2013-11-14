@@ -32,10 +32,21 @@ are allowed only if JUNK-ALLOWED is true."
                                    (error e))))))
     (remhash g!-tmp-rule *rules*)))
 
-(define-read-macro parse
-  (let ((expression (with-esrap-reader-context
-                      (read stream t nil t))))
-    `(parse ,expression ,@(read-list-old stream token))))
+;; Read behaviour of PARSE is different from that of usual reader macros,
+;; but we want to DEFMACRO!! also capture it, hence define new reader class
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defclass parse-reader-class (cl-read-macro-tokens::tautological-read-macro-token) ())
+  (defmethod read-handler ((obj parse-reader-class) stream token)
+    (let ((expression (with-esrap-reader-context
+                        (read stream t nil t))))
+      `(,(slot-value obj 'cl-read-macro-tokens::name) ,expression ,@(read-list-old stream token))))
+  (setf (gethash 'parse cl-read-macro-tokens::*read-macro-tokens-classes*) 'parse-reader-class
+        (gethash 'parse cl-read-macro-tokens::*read-macro-tokens-instances*) (make-instance 'parse-reader-class
+                                                                                            :name 'parse))
+  (setf (gethash 'parse *read-macro-tokens*)
+        (lambda (stream token)
+          (read-handler (gethash 'parse cl-read-macro-tokens::*read-macro-tokens-instances*)
+                        stream token))))
 
 
 (defun esrap-char-reader (char-reader)
