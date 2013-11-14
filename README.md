@@ -196,4 +196,12 @@ ESRAP-LIQUID> (parse '(descend-with-rule 'foo-times 4) "foofoofoo")
 #<ESRAP-LIQUID::SIMPLE-ESRAP-ERROR "~a~%">.
 ```
 
-OK, that's all for this first readme version.
+Defining esrap-environments
+---------------------------
+
+To be written, main macro are: DEFINE-ESRAP-ENV and IN-ESRAP-ENV
+Grep tests in order to see basic usage.
+
+The feature is needed, if you want to define rules not in global *RULES* variable (the default),
+but instead in local 'environment' variable. This way you may have several non-colliding sets
+of rules defined at the same time.

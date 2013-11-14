@@ -19,4 +19,5 @@
    #:defrule #:descend-with-rule #:any-string #:character #:string #:||
    #:parse
    #:text
+   #:define-esrap-env #:in-esrap-env
    ))

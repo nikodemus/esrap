@@ -26,7 +26,8 @@
                                      (:file "rule-storage")
                                      (:file "macro")
                                      (:file "esrap")
-                                     (:file "basic-rules")))
+                                     (:file "basic-rules")
+                                     (:file "esrap-env")))
                (:static-file "example-sexp.lisp")
                (:static-file "example-symbol-table.lisp")
                (:static-file "README")))
@@ -38,6 +39,7 @@
   :serial t
   :pathname "tests/"
   :components ((:file "package")
+               (:file "macro")
                (:file "rules")
                (:file "tests")))
 

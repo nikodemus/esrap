@@ -170,3 +170,9 @@
 (test preceded-by-not-gen
   (is (equal '("a" nil "b") (parse '(list "a" (<- "a") "b") "ab"))))
 
+
+(test esrap-env
+  (is (equal "foo" (foo-parse 'abracadabra "")))
+  (is (equal "bar" (bar-parse 'abracadabra "")))
+  (signals (esrap-liquid::simple-error)
+    (parse 'abracadabra "")))
