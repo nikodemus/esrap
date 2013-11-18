@@ -1,11 +1,13 @@
 ;;;; Esrap example: a simple grammar with scopes and symbol tables.
 
-(require :esrap)
+(require :esrap-liquid)
 
 (defpackage :symbol-table
-  (:use :cl :esrap))
+  (:use :cl :esrap-liquid))
 
 (in-package :symbol-table)
+
+(enable-read-macro-tokens)
 
 (declaim (special *symbol-table*))
 (defvar *symbol-table* nil)
@@ -31,49 +33,40 @@
 
 
 
-(defrule whitespace
-    (+ (or #\Space #\Tab #\Newline))
-  (:constant nil))
+(defrule whitespace ()
+  (postimes (|| #\Space #\Tab #\Newline))
+  nil)
 
-(defrule name
-    (+ (alphanumericp character))
-  (:text t))
+(defrule name ()
+  (text (postimes (pred #'alphanumericp character))))
 
-(defrule type
-    (+ (alphanumericp character))
-  (:text t))
+(defrule type ()
+  (times (postimes (pred #'alphanumericp character))))
 
-(defrule declaration
-    (and name #\: type)
-  (:destructure (name colon type)
+(defrule declaration ()
+  (destructuring-bind (name colon type) (list name #\: type)
     (declare (ignore colon))
     (setf (lookup name) (list name :type type))
     (values)))
 
-(defrule use
-    name
-  (:lambda (name)
+(defrule use ()
+  (let ((name name))
     (list :use (or (lookup name)
                    (error "~@<Undeclared variable: ~S.~@:>"
                           name)))))
+    
+(defrule statement ()
+  (remove nil (postimes (|| scope declaration use))))
 
-(defrule statement
-    (+ (or scope declaration use))
-  (:lambda (items)
-    (remove nil items)))
+(defrule statement/ws ()
+  (prog1 statement (? whitespace)))
 
-(defrule statement/ws
-    (and statement (? whitespace))
-  (:function first))
-
-(defrule scope
-    (and (and #\{ (? whitespace))
-         (* statement/ws)
-         (and #\} (? whitespace)))
-  (:function second)
-  (:around ()
-    (let ((*symbol-table* (make-symbol-table *symbol-table*)))
-      (list* :scope (apply #'append (call-transform))))))
+(defrule scope ()
+  (let ((*symbol-table* (make-symbol-table *symbol-table*)))
+    (list* :scope (apply #'append 
+                         (progm (progn #\{ (? whitespace))
+                                (* statement/ws)
+                                (progn #\} (? whitespace)))))))
 
 (parse 'scope "{
   a:int
