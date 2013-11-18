@@ -1,57 +1,53 @@
 ;;;; Esrap example: grammar, in which context is determined by a natural number
 
-(require :esrap)
+(require :esrap-liquid)
 
 (defpackage :very-context-sensitive
-  (:use :cl :esrap))
+  (:use :cl :esrap-liquid))
 
 (in-package :very-context-sensitive)
 
+(enable-read-macro-tokens)
+
 (defparameter indent 0 "Indent that is stripped from all lines.")
 
-(defrule spaces (* #\space)
-  (:lambda (lst)
-    (length lst)))
+(defrule spaces ()
+  (length (times #\space)))
 
 (defun indented-p (len)
   (>= len indent))
 
-(defrule indented-spaces (indented-p spaces)
-  (:lambda (len)
-    (- len indent)))
+(defrule indented-spaces ()
+  (- (pred #'indented-p spaces)
+     indent))
   
-(defrule digit (character-ranges (#\0 #\9)))
+(defrule digit ()
+  (character-ranges (#\0 #\9)))
 
-(defrule indent-spec-line (and spaces "|" (+ digit) "|" spaces #\newline)
-  (:destructure (wh0 ch0 digits ch1 wh1 nl0)
-		(declare (ignore wh0 ch0 ch1 wh1 nl0))
-		(parse-integer (text digits))))
+(defrule indent-spec-line ()
+  (parse-integer (text (progm (progn spaces "|")
+                              (postimes digit)
+                              (progn "|" spaces #\newline)))))
 
-(defrule indented-line (and indented-spaces (* (not #\newline)) #\newline)
-  (:destructure (isps line nl0)
-		(declare (ignore nl0))
-		(text (make-string isps :initial-element #\space)
-		      line)))
+(defrule indented-line ()
+  (prog1 (text (make-string indented-spaces :initial-element #\space)
+               (times (!! #\newline)))
+    #\newline))
 
 (defun more-indented-block-p (explicit-block)
   (>= (caddr explicit-block)
       indent))
 
-(defrule explicit-indented-block (wrap indent-spec-line
-				       (* (or (more-indented-block-p explicit-indented-block)
-					      (and (! indent-spec-line)
-						   indented-line))))
-  (:wrap-around (let ((indent wrapper))
-		  (call-parser)))
-  (:lambda (lst)
+(defrule explicit-indented-block ()
+  (let ((indent indent-spec-line))
     `(expl-block :indent ,indent
-		 :contents ,(mapcar (lambda (x)
-				      (case (car x)
-					(expl-block x)
-					(t (cadr x))))
-				    lst))))
+                 :contents ,(times (|| (pred #'more-indented-block-p
+                                             explicit-indented-block)
+                                       (progn (! indent-spec-line)
+                                              indented-line))))))
 
-(defrule explicit-blocks (+ explicit-indented-block))
+(defrule explicit-blocks ()
+  (postimes explicit-indented-block))
 
 ;; (defrule implicit-indented-block (wrap ""
 ;; 				       (* (and (! indent-spec-line)
