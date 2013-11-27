@@ -17,7 +17,6 @@
    #:register-context
    #:concat
    #:defrule #:descend-with-rule #:any-string #:character #:string #:||
-   #:parse
-   #:text
+   #:parse #:text #:fail-parse
    #:define-esrap-env #:in-esrap-env
    ))

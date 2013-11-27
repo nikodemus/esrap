@@ -158,9 +158,13 @@
                   ,subexpr)))
 
 (defmacro -> (subexpr)
-  `(progn (let ((position position))
-            ,subexpr)
-          (make-result nil)))
+  (if (and (symbolp subexpr) (equal (string subexpr) "EOF"))
+      `(if (equal end position)
+           (make-result nil)
+           (fail-parse "not at end-of-file"))
+      `(progn (let ((position position))
+		,subexpr)
+	      (make-result nil))))
 
 (defmacro! <- (subexpr)
   (if (and (symbolp subexpr) (equal (string subexpr) "SOF"))
