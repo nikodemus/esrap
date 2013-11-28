@@ -226,3 +226,8 @@
 
 (define-bar-rule abracadabra ()
   (literal-string "bar"))
+
+(let ((map '((#\a . :a) (#\b . :b) (#\c . :c))))
+  (defrule closure-rule ()
+    (cdr (assoc (character-ranges (#\a #\c))
+		map))))

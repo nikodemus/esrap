@@ -176,3 +176,9 @@
   (is (equal "bar" (bar-parse 'abracadabra "")))
   (signals (esrap-liquid::simple-error)
     (parse 'abracadabra "")))
+
+(test rule-closures
+  (is (equal :a (parse 'closure-rule "a")))
+  (is (equal :b (parse 'closure-rule "b")))
+  (is (equal :c (parse 'closure-rule "c"))))
+

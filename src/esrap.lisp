@@ -14,9 +14,9 @@ are allowed only if JUNK-ALLOWED is true."
   (unwind-protect (progn (setf (gethash g!-tmp-rule *rules*)
                                (funcall (compile nil `(lambda ()
                                                         ,(with-esrap-variable-transformer
-                                                          (make-rule-lambda 'esrap-tmp-rule ()
-                                                                            (list expression)
-                                                                            :null))))))
+							  (macroexpand-all-transforming-undefs
+							   (make-rule-lambda 'esrap-tmp-rule ()
+									     (list expression))))))))
                          ;; (format t "rule hash: ~a" (hash->assoc *rules*))
                          (let ((end (or end (length text)))
                                (position start)
