@@ -73,6 +73,9 @@
                                  "Encountered at"))
                        (parse 'list-of-integers "1, ")))
 
+(test non-consuming-negation
+  (is (equal "foo" (parse '(text (list (! "bar") "foo")) "foo"))))
+
 (test condition.2
   "Test signaling of `left-recursion' condition."
   (signals (esrap-liquid::left-recursion)

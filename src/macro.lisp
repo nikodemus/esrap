@@ -80,14 +80,14 @@
   
 
 (defmacro ! (expr)
-  "Succeeds, whenever parsing of EXPR fails. Does not consume."
+  "Succeeds, whenever parsing of EXPR fails. Does not consume, returns NIL, for compatibility with TEXT"
   `(progn (let ((position position))
             (handler-case ,expr
               (simple-esrap-error () nil)
               (:no-error (result &optional position)
                 (declare (ignore result position))
                 (fail-parse "Clause under non-consuming negation succeeded."))))
-          (make-result t 0)))
+          (make-result nil 0)))
 
 (defmacro !! (expr)
   "Succeeds, whenever parsing of EXPR fails. Consumes, assumes than EXPR parses just one character."
