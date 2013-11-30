@@ -146,9 +146,8 @@
        (block ,g!-?
          (let ((position position))
            (handler-case ,subexpr
-             (simple-esrap-error () nil)
-             (:no-error (result) (return-from ,g!-? (make-result result))))
-           (make-result nil)))
+             (simple-esrap-error () (values nil nil))
+             (:no-error (result) (return-from ,g!-? (make-result result))))))
      (when ,g!-position
        (setf position ,g!-position))
      ,g!-result))

@@ -118,6 +118,12 @@
                 (0 . (2 . 5)))
                . "baz") (parse 'around.2 "{{baz}}"))))
 
+(test optional-test
+  (is (equal '(#\b 2) (multiple-value-list (parse '(? (progn #\a #\b)) "ab"))))
+  (is (equal '(nil 0) (multiple-value-list (parse '(? (progn #\a #\b)) "ac" :junk-allowed t))))
+  (is (equal '(nil 0) (multiple-value-list (parse '(? (progn #\a #\b #\c)) "abd" :junk-allowed t)))))
+
+
 (test character-range-test
   (is (equal '(#\a #\b) (parse '(times (character-ranges (#\a #\z) #\-)) "ab" :junk-allowed t)))
   (is (equal '(#\a #\b) (parse '(times (character-ranges (#\a #\z) #\-)) "ab1" :junk-allowed t)))
