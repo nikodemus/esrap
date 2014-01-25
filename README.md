@@ -205,3 +205,33 @@ Grep tests in order to see basic usage.
 The feature is needed, if you want to define rules not in global *RULES* variable (the default),
 but instead in local 'environment' variable. This way you may have several non-colliding sets
 of rules defined at the same time.
+
+
+Capturing-variables
+-------------------
+
+Analogous to capturing groups in regexps, it is possible to capture
+results of parsing of named rules, to ease destructuring.
+
+Example: instead to clumsy
+
+```lisp
+(define-rule dressed-rule-clumsy ()
+  (prog1 (progn "foo" "bar" "baz"
+                meat)
+         "rest1" "rest2" "rest3"))
+```
+
+you may write something like
+
+```lisp
+(define-rule dressed-rule-elegant ()
+  "foo" "bar" "baz" c!-1-meat "rest1" "rest2" "rest3"
+  c!-1)
+```
+
+I.e. result of parsing of rule with name MEAT is stored in variable C!-1,
+which is later accessed.
+
+See tests for examples of usage.
+Also see CL-MIZAR parsing.lisp, where this is used extensively.
