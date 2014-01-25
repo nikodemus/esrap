@@ -14,7 +14,8 @@
   :version "1.1" ; odd minor version numbers are for unstable versions
   :description "A Packrat / Parsing Grammar / TDPL parser for Common Lisp."
   :licence "GPL"
-  :depends-on (:alexandria :defmacro-enhance :iterate :rutils :cl-indeterminism :cl-read-macro-tokens)
+  :depends-on (:alexandria :defmacro-enhance :iterate :rutils :cl-indeterminism :cl-read-macro-tokens
+			   #:cl-ppcre)
   :serial t
   :components ((:module "src"
                         :pathname "src/"

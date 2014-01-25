@@ -26,13 +26,33 @@
                           (character-ranges (esrap-character-ranges char-reader)))
             ,@body)))))
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defmacro-enhance::def-*!-symbol-p c)
+  (defun parse-c!-symbol (sym)
+    (cl-ppcre:register-groups-bind (second third)
+	("^C!-([^-]+)(.*)" (string sym))
+      (values (intern (concatenate 'string "C!-" second))
+	      (if (string= "" third)
+		  nil
+		  (subseq third 1))))))
+      
+
 (defmacro with-esrap-variable-transformer (&body body)
   `(let ((*variable-transformer* (lambda (sym)
-                                   ;; KLUDGE to not parse lambda-lists in defrule args
-                                   (if (equal "CHARACTER" (string sym))
-                                       `(descend-with-rule 'character nil)
-                                       `(descend-with-rule ',sym)))))
-     ,@body))
+				   (declare (special c!-vars))
+				   (if (c!-symbol-p sym)
+				       (multiple-value-bind (var-name rule-name) (parse-c!-symbol sym)
+					 ;; (format t "Var-name is : ~a, rule-name is : ~a~%" var-name rule-name)
+					 (if rule-name
+					     (progn (setf (gethash var-name c!-vars) t)
+						    `(setq ,var-name
+							   (descend-with-rule ',(intern rule-name))))
+					     (fail-transform)))
+				       ;; KLUDGE to not parse lambda-lists in defrule args
+				       (if (equal "CHARACTER" (string sym))
+					   `(descend-with-rule 'character nil)
+					   `(descend-with-rule ',sym))))))
+	 ,@body))
 
 (defun! make-rule-lambda (name args body)
   `(named-lambda ,(intern (strcat "ESRAP-" name)) (text position end ,@args)
@@ -49,9 +69,15 @@
     (with-esrap-reader-context
       (call-next-method))
   (with-esrap-variable-transformer
-    `(setf (gethash ',name *rules*)
-           ,(macroexpand-cc-all-transforming-undefs
-	     (make-rule-lambda name args body)))))
+    (let ((c!-vars (make-hash-table)))
+      (declare (special c!-vars))
+      ;; TODO: bug - C!-vars values are kept between different execution of a rule!
+      (let ((pre-body (macroexpand-cc-all-transforming-undefs
+		       (make-rule-lambda name args body))))
+	`(setf (gethash ',name *rules*)
+	       (let ,(iter (for (key nil) in-hashtable c!-vars)
+			   (collect key))
+		 ,pre-body))))))
 
 (defmacro! make-result (result &optional (length 0))
   ;; We must preserve the semantics, that computation of results occurs before increment of position

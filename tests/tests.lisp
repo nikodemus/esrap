@@ -191,3 +191,7 @@
   (is (equal :b (parse 'closure-rule "b")))
   (is (equal :c (parse 'closure-rule "c"))))
 
+(test variable-capturing
+  (is (equal '("foo") (parse 'dressed-elegantly "barbarbarfoobarbarbar")))
+  (is (equal '("foo" "foo") (parse 'dressed-elegantly "barbarbarfoofoobarbarbar"))))
+

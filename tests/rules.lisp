@@ -231,3 +231,7 @@
   (defrule closure-rule ()
     (cdr (assoc (character-ranges (#\a #\c))
 		map))))
+
+(defrule dressed-elegantly ()
+  "bar" "bar" "bar" c!-1-foo+ "bar" "bar" "bar"
+  c!-1)
