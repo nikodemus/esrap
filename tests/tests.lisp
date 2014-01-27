@@ -193,5 +193,13 @@
 
 (test variable-capturing
   (is (equal '("foo") (parse 'dressed-elegantly "barbarbarfoobarbarbar")))
-  (is (equal '("foo" "foo") (parse 'dressed-elegantly "barbarbarfoofoobarbarbar"))))
+  (is (equal '("foo" "foo") (parse 'dressed-elegantly "barbarbarfoofoobarbarbar")))
+  (is (equal '("foo") (parse 'dressed-elegantly-2 "barbarbarfoobarbarbar")))
+  (is (equal '("foo" "foo") (parse 'dressed-elegantly-2 "barbarbarfoofoobarbarbar")))
+  (is (equal '("foo") (parse 'dressed-elegantly-2 "barbarfoobarbar")))
+  (is (equal '("foo" "foo") (parse 'dressed-elegantly-2 "barbarfoofoobarbar")))
+  (is (equal '(("bar" "bar") ("bar" "bar" "bar")) (parse 'cap-overwrite "barbarfoofoobarbarbar"))))
+  
+
+
 

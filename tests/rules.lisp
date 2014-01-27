@@ -215,6 +215,9 @@
 (defrule foo+ ()
   (postimes "foo"))
 
+(defrule bar+ ()
+  (postimes "bar"))
+
 (defrule decimal ()
   (parse-integer (format nil (literal-string "~{~A~}")
                          (postimes (|| "0" "1" "2" "3" "4" "5" "6" "7" "8" "9")))))
@@ -235,3 +238,12 @@
 (defrule dressed-elegantly ()
   "bar" "bar" "bar" c!-1-foo+ "bar" "bar" "bar"
   c!-1)
+
+(defrule dressed-elegantly-2 ()
+  (|| (progn "bar" "bar" "bar" c!-1-foo+ "bar" "bar" "bar")
+      (progn "bar" "bar" c!-1-foo+ "bar" "bar"))
+  c!-1)
+
+(defrule cap-overwrite ()
+  c!-1-bar+ c!-2-foo+ c!-2-bar+
+  (list c!-1 c!-2))
