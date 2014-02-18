@@ -55,14 +55,25 @@
 	 ,@body))
 
 (defun! make-rule-lambda (name args body)
-  `(named-lambda ,(intern (strcat "ESRAP-" name)) (text position end ,@args)
-     (let ((,g!-position position))
-       (declare (ignorable ,g!-position))
-       (symbol-macrolet ((match-start ,g!-position)
-			 (match-end position))
-	 (with-cached-result (,name position text ,@args)
-	   (values (progn ,@body)
-		   position))))))
+  (multiple-value-bind (reqs opts rest kwds allow-other-keys auxs kwds-p) (parse-ordinary-lambda-list args)
+    (declare (ignore kwds))
+    (if kwds-p (error "&KEY arguments are not supported"))
+    (if allow-other-keys (error "&ALLOW-OTHER-KEYS is not supported"))
+    (if auxs (error "&AUX variables are not supported, use LET"))
+    `(named-lambda ,(intern (strcat "ESRAP-" name)) (text position end ,@args)
+       (let ((,g!-position position))
+	 (declare (ignorable ,g!-position))
+	 (symbol-macrolet ((match-start ,g!-position)
+			   (match-end position))
+	   (with-cached-result (,name position text ,@reqs
+				      ,@(if rest
+					    `(,rest)
+					    (iter (for (opt-name opt-default opt-supplied-p) in opts)
+						  (collect opt-name)
+						  (if opt-supplied-p
+						      (collect opt-supplied-p)))))
+	     (values (progn ,@body)
+		     position)))))))
 
 
 (defmacro!! defrule (name args &body body)
