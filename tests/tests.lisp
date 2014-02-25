@@ -201,5 +201,13 @@
   (is (equal '(("bar" "bar") ("bar" "bar" "bar")) (parse 'cap-overwrite "barbarfoofoobarbarbar"))))
   
 
-
-
+(test optional-rule-args
+  (is (equal '("f" "f" "f") (parse 'f-opt-times "fff")))
+  (is (equal '("f" "f" "f" "f") (parse '(descend-with-rule 'f-opt-times 4) "ffff")))
+  (signals-esrap-error ("ffff" 3 ("Didnt make it to the end of the text"
+                              "Encountered at"))
+                       (parse 'f-opt-times "ffff"))
+  (signals-esrap-error ("fff" 3 ("Greedy repetition failed"
+                              "Encountered at"))
+                       (parse '(descend-with-rule 'f-opt-times 4) "fff")))
+  

@@ -247,3 +247,7 @@
 (defrule cap-overwrite ()
   c!-1-bar+ c!-2-foo+ c!-2-bar+
   (list c!-1 c!-2))
+
+(defrule f-opt-times (&optional (n 3))
+  (times "f" :exactly n))
+
