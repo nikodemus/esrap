@@ -76,7 +76,7 @@
 		     position)))))))
 
 
-(defmacro!! defrule (name args &body body)
+(defmacro!! defrule (name args &body body &environment env)
     (with-esrap-reader-context
       (call-next-method))
   (with-esrap-variable-transformer
@@ -84,7 +84,8 @@
       (declare (special c!-vars))
       ;; TODO: bug - C!-vars values are kept between different execution of a rule!
       (let ((pre-body (macroexpand-cc-all-transforming-undefs
-		       (make-rule-lambda name args body))))
+		       (make-rule-lambda name args body)
+		       :env env)))
 	`(setf (gethash ',name *rules*)
 	       (let ,(iter (for (key nil) in-hashtable c!-vars)
 			   (collect key))
