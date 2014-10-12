@@ -21,9 +21,6 @@
 	  (setf (gethash rule hash-table)
 		(gethash rule *rules*)))))
 
-(defun keywordicate (str)
-  (intern (string str) (find-package "KEYWORD")))
-
 (defmacro define-esrap-env (symbol)
   `(progn (eval-when (:compile-toplevel :load-toplevel :execute)
 	    (defvar ,(symbolicate symbol "-RULES") (make-hash-table))
@@ -42,7 +39,7 @@
 		     (defrule ,symbol ,args ,@body))))
 	  (defmacro ,(symbolicate "REGISTER-" symbol "-CONTEXT")
 	      (context-var &rest plausible-contexts)
-	    `(progn (defparameter ,context-var ,(keywordicate (format nil "~a" (car plausible-contexts))))
+	    `(progn (defparameter ,context-var ,(make-keyword (format nil "~a" (car plausible-contexts))))
 		    ,@(mapcar (lambda (context-name)
 				(let ((pred-name (symbolicate context-name
 								     "-"
@@ -54,7 +51,7 @@
 				  `(progn
 				     (defun ,pred-name (x)
 				       (declare (ignore x))
-				       (equal ,context-var ,(keywordicate context-name)))
+				       (equal ,context-var ,(make-keyword context-name)))
 				     (,',(symbolicate "DEFINE-" symbol "-RULE") ,rule-name ()
 				       ;; KLUDGE: probably, special reader syntax for defining rules
 				       ;; will not work here anyway
