@@ -211,3 +211,5 @@
                               "Encountered at"))
                        (parse '(descend-with-rule 'f-opt-times 4) "fff")))
   
+(test recursive-capturing
+  (is (equal '(#\1 #\2 #\3 #\4 #\5 nil) (parse 'recurcapturing "(1(2(3(4(5(a))))))"))))

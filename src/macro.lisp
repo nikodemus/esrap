@@ -87,9 +87,8 @@
 		       (make-rule-lambda name args body)
 		       :env env)))
 	`(setf (gethash ',name *rules*)
-	       (let ,(iter (for (key nil) in-hashtable c!-vars)
-			   (collect key))
-		 ,pre-body))))))
+	       ,(crunch-c!-s pre-body))))))
+
 
 (defmacro! make-result (result &optional (length 0))
   ;; We must preserve the semantics, that computation of results occurs before increment of position
@@ -219,3 +218,18 @@
   `(|| ,@(mapcar (lambda (clause)
                    `(progn ,@clause))
                  clauses)))
+
+
+
+(defun crunch-c!-s (pre-body)
+  (declare (special c!-vars))
+  ;; (format t "pre-body ~a~%" pre-body)
+  (destructuring-bind (labels ((name args . body))
+			. body2) pre-body
+    (declare (ignore labels))
+    `(labels ((,name ,args
+		(let ,(iter (for (key nil) in-hashtable c!-vars)
+			    (collect key))
+		  ,@body)))
+       ,@body2)))
+    

@@ -251,3 +251,15 @@
 (defrule f-opt-times (&optional (n 3))
   (times "f" :exactly n))
 
+
+(defrule cipher ()
+  (character-ranges (#\0 #\9)))
+
+(defrule recurcapturing ()
+  #\( (|| (progn c!-int-cipher c!-rc-recurcapturing)
+	  #\a)
+  #\)
+  (cons c!-int c!-rc))
+
+
+
