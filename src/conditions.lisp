@@ -74,9 +74,12 @@ the error occurred."))
          :format-control format-control
          :format-arguments format-arguments))
 
-(defmacro fail-parse (&optional (reason "No particular reason.") &rest args)
-  `(let ((reason (apply #'format `(nil ,,reason ,,@args))))
-     (simple-esrap-error text position reason "~a~%" reason)))
+(defmacro fail-parse-format (&optional (reason "No particular reason.") &rest args)
+  `(let ((formatted-reason (apply #'format `(nil ,,reason ,,@args))))
+     (simple-esrap-error text position formatted-reason ,reason ,@args)))
+
+(defmacro fail-parse (&optional (reason "No particular reason."))
+  `(simple-esrap-error text position ,reason ,reason))
 
 (define-condition left-recursion (esrap-error)
   ((nonterminal :initarg :nonterminal :initform nil :reader left-recursion-nonterminal)

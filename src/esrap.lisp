@@ -87,7 +87,8 @@ are allowed only if JUNK-ALLOWED is true."
             into res)
           (finally (return `(let ((,g!-char (descend-with-rule 'character nil)))
                               (cond ,@res
-                                    (t (fail-parse "Character ~s does not belong to specified range" ,g!-char)))))))))
+                                    (t (fail-parse-format "Character ~s does not belong to specified range"
+							  ,g!-char)))))))))
 
 (defvar *indentation-hint-table* nil)
 

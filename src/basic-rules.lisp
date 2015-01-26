@@ -23,7 +23,7 @@
           (let ((it (char text position)))
             (if (char= it char)
                 (make-result it 1)
-                (fail-parse (literal-string "Char ~a is not equal to desired char ~a") it char)))
+                (fail-parse-format (literal-string "Char ~a is not equal to desired char ~a") it char)))
           (make-result (char text position) 1))
       (fail-parse (literal-string "EOF reached while trying to parse character."))))
 
@@ -31,9 +31,9 @@
   (let ((any-string (any-string (length string))))
     (if (string= any-string string)
         (make-result any-string)
-        (fail-parse (literal-string "String ~a is not equal to desired string ~a")
-                    any-string
-                    string))))
+        (fail-parse-format (literal-string "String ~a is not equal to desired string ~a")
+			   any-string
+			   string))))
 
 (defun joinl (joinee lst)
   (format nil (strcat "~{~a~^" joinee "~}") lst))
