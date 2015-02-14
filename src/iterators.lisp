@@ -118,15 +118,12 @@
 (defmethod next-iter ((iter cache-iterator))
   (with-slots (cached-vals cached-pos sub-iter) iter
     (with-slots (vector) cached-vals
-      (format t "I'm here~%")
       (if (equal cached-pos (fill-pointer vector))
 	  (let ((new-val (next-iter sub-iter)))
-	    (format t "I'm here 1~%")
 	    (buffer-push new-val cached-vals)
 	    (incf cached-pos)
 	    new-val)
 	  (let ((old-val (aref vector cached-pos)))
-	    (format t "I'm here 2~%")
 	    (incf cached-pos)
 	    old-val)))))
 
