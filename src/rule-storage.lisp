@@ -15,9 +15,13 @@
 ;;; accessible via RULE-SYMBOL.
 
 (defvar *rules* (make-hash-table))
+(defvar *rule-context-sensitivity* (make-hash-table))
+
+(defun context-sensitive-rule-p (symbol)
+  (gethash symbol *rule-context-sensitivity*))
 
 (defun clear-rules ()
   (clrhash *rules*)
+  (clrhash *rule-context-sensitivity*)
   nil)
-
 

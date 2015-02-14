@@ -8,7 +8,7 @@
 
 (enable-read-macro-tokens)
 
-(defrule any-string (length)
+(def-nocontext-rule any-string (length)
   (let ((limit (+ length position)))
     (if (<= limit end)
         (make-result (subseq text position limit) length)
@@ -17,7 +17,7 @@
   `(descend-with-rule 'any-string ,length))
 
 
-(defrule character (char)
+(def-nocontext-rule character (char)
   (if (< position end)
       (if char
           (let ((it (char text position)))
@@ -27,7 +27,7 @@
           (make-result (char text position) 1))
       (fail-parse (literal-string "EOF reached while trying to parse character."))))
 
-(defrule string (string)
+(def-nocontext-rule string (string)
   (let ((any-string (any-string (length string))))
     (if (string= any-string string)
         (make-result any-string)

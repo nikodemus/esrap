@@ -12,14 +12,52 @@
 
 (defvar *cache*)
 
-(defun make-cache ()
-  (make-hash-table :test #'equal))
+(defclass esrap-cache ()
+  ((pos-hashtable :initform (make-hash-table :test #'equal))
+   (start-pos :initform 0)))
 
-(defun get-cached (symbol position args cache)
-  (gethash `(,symbol ,position ,args ,@(mapcar #'symbol-value contexts)) cache))
+(defun make-cache ()
+  (make-instance 'esrap-cache))
+
+(defgeneric get-cached (symbol position args cache)
+  (:documentation "Accessor for cached parsing results."))
+
+(defun ensure-subpos-hash! (pos-hash pos)
+  (multiple-value-bind (it got) (gethash pos pos-hash)
+    (if got
+	it
+	(setf (gethash pos pos-hash) (make-hash-table :test #'equal)))))
+
+(defmethod get-cached (symbol position args (cache esrap-cache))
+  (with-slots (pos-hashtable) cache
+    (let ((subpos-hash (ensure-subpos-hash! pos-hashtable position)))
+      (if (context-sensitive-rule-p symbol)
+	  (gethash `(,symbol ,args ,@(mapcar #'symbol-value contexts)) subpos-hash)
+	  (gethash `(,symbol ,args) subpos-hash)))))
 
 (defun (setf get-cached) (result symbol position args cache)
-  (setf (gethash `(,symbol ,position ,args ,@(mapcar #'symbol-value contexts)) cache) result))
+  (with-slots (pos-hashtable) cache
+    (let ((subpos-hash (ensure-subpos-hash! pos-hashtable position)))
+      (if (context-sensitive-rule-p symbol)
+	  (setf (gethash `(,symbol ,args ,@(mapcar #'symbol-value contexts)) subpos-hash) result)
+	  (setf (gethash `(,symbol ,args) subpos-hash) result)))))
+
+(defmethod soft-shrink ((obj esrap-cache) num-elts-discarded)
+  (with-slots (start-pos pos-hashtable) obj
+    (iter (for i from start-pos to (1- num-elts-discarded))
+	  (remhash i pos-hashtable))
+    (incf start-pos num-elts-discarded)))
+
+(defmethod hard-shrink ((obj esrap-cache) num-elts-discarded)
+  (with-slots (start-pos pos-hashtable) obj
+    (let ((new-hash (make-hash-table :test #'equal)))
+      (iter (for (key val) in-hashtable pos-hashtable)
+	    (if (>= key (+ start-pos num-elts-discarded))
+		(setf (gethash (- key (+ start-pos num-elts-discarded)) new-hash)
+		      val)))
+      (setf start-pos 0
+	    pos-hashtable new-hash))))
+
 
 (defvar *nonterminal-stack* nil)
 

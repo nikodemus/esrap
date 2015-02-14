@@ -76,7 +76,7 @@
 		     position)))))))
 
 
-(defmacro!! defrule (name args &body body &environment env)
+(defmacro!! %defrule (name args &body body &environment env)
     (with-esrap-reader-context
       (call-next-method))
   (with-esrap-variable-transformer
@@ -88,6 +88,16 @@
 		       :env env)))
 	`(setf (gethash ',name *rules*)
 	       ,(crunch-c!-s pre-body))))))
+
+(defmacro!! defrule (name args &body body)
+    ()
+  `(progn (%defrule ,name ,args ,@body)
+	  (setf (gethash ',name *rule-context-sensitivity*) t)))
+
+(defmacro!! def-nocontext-rule (name args &body body)
+    ()
+  `(progn (%defrule ,name ,args ,@body)
+	  (setf (gethash ',name *rule-context-sensitivity*) nil)))
 
 
 (defmacro! make-result (result &optional (length 0))
