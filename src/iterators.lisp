@@ -97,14 +97,18 @@
 
 (defmethod initialize-instance :after ((this cache-iterator) &key &allow-other-keys)
   (with-slots (cached-vals) this
-    (setf cached-vals (make-instance 'buffer-vector))))
+    (setf cached-vals (make-instance 'buffer-vector))
+    (with-slots (vector) cached-vals
+      (setf (fill-pointer vector) 0))))
 
 (defun mk-cache-iter (sub-iter)
   (make-instance 'cache-iterator :sub-iter sub-iter))
 
-(defun rewind-to-pos (cache-iterator new-pos)
+(defun rewind (cache-iterator &optional new-pos)
   (with-slots (cached-vals cached-pos) cache-iterator
     (with-slots (vector start-pointer) cached-vals
+      (when (null new-pos)
+	(setf new-pos start-pointer))
       (cond ((< new-pos start-pointer)
 	     (error "New position is less than (soft) beginning of the array."))
 	    ((> new-pos (fill-pointer vector))
@@ -113,14 +117,18 @@
   
 (defmethod next-iter ((iter cache-iterator))
   (with-slots (cached-vals cached-pos sub-iter) iter
-    (if (equal cached-pos (fill-pointer sub-iter))
-	(let ((new-val (next-iter sub-iter)))
-	  (buffer-push new-val cached-vals)
-	  (incf cached-pos)
-	  new-val)
-	(let ((old-val (aref cached-vals cached-pos)))
-	  (incf cached-pos)
-	  old-val))))
+    (with-slots (vector) cached-vals
+      (format t "I'm here~%")
+      (if (equal cached-pos (fill-pointer vector))
+	  (let ((new-val (next-iter sub-iter)))
+	    (format t "I'm here 1~%")
+	    (buffer-push new-val cached-vals)
+	    (incf cached-pos)
+	    new-val)
+	  (let ((old-val (aref vector cached-pos)))
+	    (format t "I'm here 2~%")
+	    (incf cached-pos)
+	    old-val)))))
 
 (defmacro-driver! (for var in-iter iter)
   (let ((kwd (if generate 'generate 'for)))

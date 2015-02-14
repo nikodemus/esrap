@@ -220,4 +220,19 @@
 
 (test simple-iterators
   (is (equal '(#\a #\b #\c #\d) (iter (for c in-iter (esrap-liquid::mk-string-iter "abcd"))
-				      (collect c)))))
+				      (collect c))))
+  (is (equal '(#\a #\b #\a #\b #\c #\d #\c #\d)
+	     (let ((iter (esrap-liquid::mk-cache-iter (esrap-liquid::mk-string-iter "abcd")))
+		   lst)
+	       (setf lst (iter (for c in-iter iter)
+			       (for i from 0 to 1)
+			       (collect c)))
+	       (esrap-liquid::rewind-to-pos iter 0)
+	       (setf lst (append lst
+				 (iter (for c in-iter iter)
+				       (collect c))))
+	       (esrap-liquid::rewind-to-pos iter 2)
+	       (setf lst (append lst
+				 (iter (for c in-iter iter)
+				       (collect c))))))))
+
