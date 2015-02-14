@@ -68,10 +68,63 @@
 	(vector-pop obj))))
 
 
+;;; Pythonic approach to iteration
+;;; iterators - classes with NEXT-ITER method, which raises STOP-ITERATION when iterator is depleted
+(define-condition stop-iteration (error)
+  ())
+(defgeneric next-iter (iter)
+  (:documentation "Main method of iteration protocol"))
 
-(defclass super-cache-iterator ()
-  ((cached-vals)))
+(defclass string-iter ()
+  ((pos :initform 0 :initarg :start)
+   (str :initarg :string :initform "")))
 
-(defmethod initialize-instance :after ((this super-cache-iterator) &key &allow-other-keys)
+(defun mk-string-iter (string &key (start 0))
+  (make-instance 'string-iter :string string :start start))
+
+(defmethod next-iter ((iter string-iter))
+  (with-slots (str pos) iter
+    (if (equal pos (length str))
+	(error 'stop-iteration)
+	(let ((char (char str pos)))
+	  (incf pos)
+	  char))))
+
+(defclass cache-iterator ()
+  ((cached-vals)
+   (cached-pos :initform 0)
+   (sub-iter :initform (error "Please, specify underlying iterator") :initarg :sub-iter)))
+
+(defmethod initialize-instance :after ((this cache-iterator) &key &allow-other-keys)
   (with-slots (cached-vals) this
-    (setf cached-vals (make-array 1))))
+    (setf cached-vals (make-instance 'buffer-vector))))
+
+(defun mk-cache-iter (sub-iter)
+  (make-instance 'cache-iterator :sub-iter sub-iter))
+
+(defun rewind-to-pos (cache-iterator new-pos)
+  (with-slots (cached-vals cached-pos) cache-iterator
+    (with-slots (vector start-pointer) cached-vals
+      (cond ((< new-pos start-pointer)
+	     (error "New position is less than (soft) beginning of the array."))
+	    ((> new-pos (fill-pointer vector))
+	     (error "New position is greater than cache range, and than read-from-stream value"))
+	    (t (setf cached-pos new-pos))))))
+  
+(defmethod next-iter ((iter cache-iterator))
+  (with-slots (cached-vals cached-pos sub-iter) iter
+    (if (equal cached-pos (fill-pointer sub-iter))
+	(let ((new-val (next-iter sub-iter)))
+	  (buffer-push new-val cached-vals)
+	  (incf cached-pos)
+	  new-val)
+	(let ((old-val (aref cached-vals cached-pos)))
+	  (incf cached-pos)
+	  old-val))))
+
+(defmacro-driver! (for var in-iter iter)
+  (let ((kwd (if generate 'generate 'for)))
+    `(progn (with ,g!-iter = ,iter)
+	    (,kwd ,var next (let ((next-val (handler-case (next-iter ,g!-iter)
+					      (stop-iteration () (terminate)))))
+			      next-val)))))

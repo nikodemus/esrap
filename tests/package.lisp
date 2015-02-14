@@ -8,7 +8,7 @@
 (in-package :cl-user)
 
 (defpackage :esrap-liquid-tests
-  (:use :alexandria :cl :esrap-liquid :fiveam)
+  (:use :alexandria :cl :esrap-liquid :fiveam #:iterate)
   (:shadowing-import-from :esrap-liquid "!" "!!")
   (:export #:run-tests))
 

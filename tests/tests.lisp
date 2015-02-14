@@ -213,3 +213,11 @@
   
 (test recursive-capturing
   (is (equal '(#\1 #\2 #\3 #\4 #\5 nil) (parse 'recurcapturing "(1(2(3(4(5(a))))))"))))
+
+
+
+;;; String iterators
+
+(test simple-iterators
+  (is (equal '(#\a #\b #\c #\d) (iter (for c in-iter (esrap-liquid::mk-string-iter "abcd"))
+				      (collect c)))))
