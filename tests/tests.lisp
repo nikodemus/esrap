@@ -227,11 +227,11 @@
 	       (setf lst (iter (for c in-iter iter)
 			       (for i from 0 to 1)
 			       (collect c)))
-	       (esrap-liquid::rewind-to-pos iter 0)
+	       (esrap-liquid::rewind iter)
 	       (setf lst (append lst
 				 (iter (for c in-iter iter)
 				       (collect c))))
-	       (esrap-liquid::rewind-to-pos iter 2)
+	       (esrap-liquid::rewind iter 2)
 	       (setf lst (append lst
 				 (iter (for c in-iter iter)
 				       (collect c))))))))
