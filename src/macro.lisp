@@ -59,15 +59,15 @@
     (if allow-other-keys (error "&ALLOW-OTHER-KEYS is not supported"))
     (if auxs (error "&AUX variables are not supported, use LET"))
     `(named-lambda ,(intern (strcat "ESRAP-" name)) (,@args)
-       (with-cached-result (,name ,@reqs
-				  ,@(if rest
-					`(,rest)
-					(iter (for (opt-name opt-default opt-supplied-p) in opts)
-					      (collect opt-name)
-					      (if opt-supplied-p
-						  (collect opt-supplied-p)))))
-	 (let* ((the-position (+ the-position the-length))
-		(the-length 0))
+       (let* ((the-position (+ the-position the-length))
+	      (the-length 0))
+	 (with-cached-result (,name ,@reqs
+				    ,@(if rest
+					  `(,rest)
+					  (iter (for (opt-name opt-default opt-supplied-p) in opts)
+						(collect opt-name)
+						(if opt-supplied-p
+						    (collect opt-supplied-p)))))
 	   (values (progn ,@body)
 		   the-length))))))
 
@@ -121,6 +121,7 @@
                               (mapcar (lambda (x)
                                         (slot-value x 'reason))
                                       (nreverse ,g!-parse-errors))))))
+     (format t "After ||: ~%") (print-iter-state the-iter)
      (incf the-length ,g!-the-length)
      ,g!-result))
   
@@ -157,7 +158,8 @@
                     (multiple-value-bind (,g!-subresult ,g!-the-length)
 			(with-saved-iter-state (the-iter)
 			  (format t "   Inside subexpression:~%")
-			  (handler-case (let ((the-length 0))
+			  (handler-case (let* ((the-position (+ the-position the-length))
+					       (the-length 0))
 					  (let ((subexpr ,subexpr))
 					    (format t "    succeeding ~s ~a~%" subexpr the-length)
 					    (print-iter-state the-iter)

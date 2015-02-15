@@ -168,4 +168,5 @@
 (defun print-iter-state (cached-iter)
   (with-slots (cached-vals cached-pos) cached-iter
     (with-slots (start-pointer vector) cached-vals
-      (format t "Pos is: ~a, Start is: ~a, Cache contents is ~a~%" cached-pos start-pointer vector))))
+      (format t "Pos is: ~a, Start is: ~a, Cache contents is ~a, the-pos is: ~a, the-length is: ~a~%"
+	      cached-pos start-pointer vector the-position the-length))))
