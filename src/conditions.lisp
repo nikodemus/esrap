@@ -66,9 +66,9 @@ the error occurred."))
 
 (declaim (ftype (function (t t t &rest t) (values nil &optional))
                 simple-esrap-error))
-(defun simple-esrap-error (text position reason format-control &rest format-arguments)
+(defun simple-esrap-error (position reason format-control &rest format-arguments)
   (error 'simple-esrap-error
-         :text text
+	 :text ""
          :position position
 	 :reason reason
          :format-control format-control
@@ -76,10 +76,10 @@ the error occurred."))
 
 (defmacro fail-parse-format (&optional (reason "No particular reason.") &rest args)
   `(let ((formatted-reason (apply #'format `(nil ,,reason ,,@args))))
-     (simple-esrap-error text position formatted-reason ,reason ,@args)))
+     (simple-esrap-error (+ the-position the-length) formatted-reason ,reason ,@args)))
 
 (defmacro fail-parse (&optional (reason "No particular reason."))
-  `(simple-esrap-error text position ,reason ,reason))
+  `(simple-esrap-error (+ the-position the-length) ,reason ,reason))
 
 (define-condition left-recursion (esrap-error)
   ((nonterminal :initarg :nonterminal :initform nil :reader left-recursion-nonterminal)

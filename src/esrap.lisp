@@ -8,29 +8,42 @@
 
 ;;; MAIN INTERFACE
 
-(defun! parse (expression text &key (start 0) end junk-allowed)
+(defmacro! with-tmp-rule ((var expression) &body body)
+  `(let ((,var (gensym "TMP-RULE")))
+     (unwind-protect (progn (setf (gethash ,var *rules*)
+				  (funcall (compile nil `(lambda ()
+							   ,(with-esrap-variable-transformer
+							     (macroexpand-all-transforming-undefs
+							      (make-rule-lambda 'esrap-tmp-rule ()
+										(list ,expression))))))))
+			    ,@body)
+       (remhash ,var *rules*))))
+
+
+(defun parse-token-iter (expression token-iter &key junk-allowed)
+  (let ((the-iter token-iter)
+	(*cache* (make-cache))
+	(the-position 0)
+	(the-length 0))
+    (with-tmp-rule (tmp-rule expression)
+      (let ((result (handler-case (descend-with-rule tmp-rule)
+		      (simple-esrap-error (e)
+			(if junk-allowed
+			    (values nil 0)
+			    (error e))))))
+	(when (not junk-allowed)
+	  (handler-case (descend-with-rule 'eof)
+	    (simple-esrap-error ()
+	      (fail-parse "Didnt make it to the end of the text"))))
+	(values result the-length)))))
+
+(defun mk-esrap-iter-from-string (str start end)
+  (mk-cache-iter (mk-string-iter (subseq str start end))))
+
+(defun parse (expression text &key (start 0) end junk-allowed)
   "Parses TEXT using EXPRESSION from START to END. Incomplete parses
 are allowed only if JUNK-ALLOWED is true."
-  (unwind-protect (progn (setf (gethash g!-tmp-rule *rules*)
-                               (funcall (compile nil `(lambda ()
-                                                        ,(with-esrap-variable-transformer
-							  (macroexpand-all-transforming-undefs
-							   (make-rule-lambda 'esrap-tmp-rule ()
-									     (list expression))))))))
-                         ;; (format t "rule hash: ~a" (hash->assoc *rules*))
-                         (let ((end (or end (length text)))
-                               (position start)
-                               (*cache* (make-cache)))
-                           (handler-case (let ((result (descend-with-rule g!-tmp-rule)))
-                                           (if (and (not junk-allowed)
-                                                    (not (equal end position)))
-                                               (fail-parse "Didnt make it to the end of the text")
-                                               (values result position)))
-                             (simple-esrap-error (e)
-                               (if junk-allowed
-                                   (values nil start)
-                                   (error e))))))
-    (remhash g!-tmp-rule *rules*)))
+  (parse-token-iter expression (mk-esrap-iter-from-string text start end) :junk-allowed junk-allowed))
 
 ;; Read behaviour of PARSE is different from that of usual reader macros,
 ;; but we want to DEFMACRO!! also capture it, hence define new reader class
@@ -40,12 +53,14 @@ are allowed only if JUNK-ALLOWED is true."
     (let ((expression (with-esrap-reader-context
                         (read stream t nil t))))
       `(,(slot-value obj 'cl-read-macro-tokens::name) ,expression ,@(read-list-old stream token))))
-  (setf (gethash 'parse cl-read-macro-tokens::*read-macro-tokens-classes*) 'parse-reader-class
-        (gethash 'parse cl-read-macro-tokens::*read-macro-tokens-instances*) (make-instance 'parse-reader-class
-                                                                                            :name 'parse))
-  (setf (gethash 'parse *read-macro-tokens*)
+  (setf (gethash 'parse-token-iter cl-read-macro-tokens::*read-macro-tokens-classes*)
+	'parse-reader-class
+        (gethash 'parse-token-iter cl-read-macro-tokens::*read-macro-tokens-instances*)
+	(make-instance 'parse-reader-class
+		       :name 'parse-token-iter))
+  (setf (gethash 'parse-token-iter *read-macro-tokens*)
         (lambda (stream token)
-          (read-handler (gethash 'parse cl-read-macro-tokens::*read-macro-tokens-instances*)
+          (read-handler (gethash 'parse-token-iter cl-read-macro-tokens::*read-macro-tokens-instances*)
                         stream token))))
 
 

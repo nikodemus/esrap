@@ -8,12 +8,10 @@
 
 (defmacro! descend-with-rule (o!-sym &rest args)
   `(multiple-value-bind (,g!-it ,g!-got) (gethash ,o!-sym *rules*)
-     ;; (format t "sym: ~a ~a~%" ,o!-sym position)
      (if (not ,g!-got)
          (error "Undefined rule: ~s" ,o!-sym)
-         (multiple-value-bind (result new-position) (funcall ,g!-it text position end ,@args)
-           ;; (format t "position before setting ~a, after setting would be ~a" position new-position)
-           (setf position new-position)
+         (multiple-value-bind (result new-length) (funcall ,g!-it ,@args)
+           (incf the-length new-length)
            result))))
 
 (defmacro with-esrap-reader-context (&body body)
@@ -60,20 +58,18 @@
     (if kwds-p (error "&KEY arguments are not supported"))
     (if allow-other-keys (error "&ALLOW-OTHER-KEYS is not supported"))
     (if auxs (error "&AUX variables are not supported, use LET"))
-    `(named-lambda ,(intern (strcat "ESRAP-" name)) (text position end ,@args)
-       (let ((,g!-position position))
-	 (declare (ignorable ,g!-position))
-	 (symbol-macrolet ((match-start ,g!-position)
-			   (match-end position))
-	   (with-cached-result (,name position text ,@reqs
-				      ,@(if rest
-					    `(,rest)
-					    (iter (for (opt-name opt-default opt-supplied-p) in opts)
-						  (collect opt-name)
-						  (if opt-supplied-p
-						      (collect opt-supplied-p)))))
-	     (values (progn ,@body)
-		     position)))))))
+    `(named-lambda ,(intern (strcat "ESRAP-" name)) (,@args)
+       (with-cached-result (,name ,@reqs
+				  ,@(if rest
+					`(,rest)
+					(iter (for (opt-name opt-default opt-supplied-p) in opts)
+					      (collect opt-name)
+					      (if opt-supplied-p
+						  (collect opt-supplied-p)))))
+	 (let* ((the-position (+ the-position the-length))
+		(the-length 0))
+	   (values (progn ,@body)
+		   the-length))))))
 
 
 (defmacro!! %defrule (name args &body body &environment env)
@@ -82,6 +78,7 @@
   (with-esrap-variable-transformer
     (let ((c!-vars (make-hash-table)))
       (declare (special c!-vars))
+      (format t "I'm starting to actually expand!~%")
       ;; TODO: bug - C!-vars values are kept between different execution of a rule!
       (let ((pre-body (macroexpand-cc-all-transforming-undefs
 		       (make-rule-lambda name args body)
@@ -101,67 +98,79 @@
 
 
 (defmacro! make-result (result &optional (length 0))
-  ;; We must preserve the semantics, that computation of results occurs before increment of position
+  ;; We must preserve the semantics, that computation of results occurs before increment of length
   `(let ((,g!-result ,result))
-     (incf position ,length)
-     (values ,g!-result position)))
+     (values ,g!-result (incf the-length ,length))))
 
 
 (defmacro! || (&rest clauses)
-  `(multiple-value-bind (,g!-result ,g!-position)
-       ;; All this tricky business with BLOCK just for automatic POSITION tracking.
+  `(multiple-value-bind (,g!-result ,g!-the-length)
+       ;; All this tricky business with BLOCK just for automatic LENGTH tracking.
        (block ,g!-ordered-choice
          (let (,g!-parse-errors)
            ,@(mapcar (lambda (clause)
-                       `(handler-case (let ((position position))
-                                        ;; (format t "Im in ordered choice~%")
-                                        (return-from ,g!-ordered-choice (values ,clause position)))
-                          (simple-esrap-error (e) (push e ,g!-parse-errors))))
+                       `(let ((the-length 0))
+			  (print-iter-state the-iter)
+			  (with-saved-iter-state (the-iter)
+			    (handler-case (return-from ,g!-ordered-choice (values ,clause the-length))
+			      (simple-esrap-error (e)
+				(restore-iter-state)
+				(push e ,g!-parse-errors))))))
                      clauses)
            (fail-parse (joinl "~%"
                               (mapcar (lambda (x)
                                         (slot-value x 'reason))
                                       (nreverse ,g!-parse-errors))))))
-     (setf position ,g!-position)
+     (incf the-length ,g!-the-length)
      ,g!-result))
   
 
 (defmacro ! (expr)
   "Succeeds, whenever parsing of EXPR fails. Does not consume, returns NIL, for compatibility with TEXT"
-  `(progn (let ((position position))
+  `(progn (let ((the-length 0))
             (handler-case ,expr
               (simple-esrap-error () nil)
-              (:no-error (result &optional position)
-                (declare (ignore result position))
+              (:no-error (result &optional the-length)
+                (declare (ignore result the-length))
                 (fail-parse "Clause under non-consuming negation succeeded."))))
           (make-result nil 0)))
 
 (defmacro !! (expr)
   "Succeeds, whenever parsing of EXPR fails. Consumes, assumes than EXPR parses just one character."
-  `(progn (let ((position position))
+  `(progn (let ((the-length 0))
             (handler-case ,expr
               (simple-esrap-error () nil)
-              (:no-error (result &optional position)
-                (declare (ignore result position))
+              (:no-error (result &optional the-length)
+                (declare (ignore result the-length))
                 (fail-parse "Clause under consuming negation succeeded."))))
-          (if (equal end position)
-              (fail-parse "Reached EOF while trying to consume character.")
-              (make-result (char text position) 1))))
+	  ;; TODO : here was a check about EOF. How should I properly address this with streams?
+	  (make-result 'caboom! 1)))
+              
 
 (defmacro! times (subexpr &key from upto exactly)
   (flet ((frob (condition)
            `(let (,g!-result)
               (iter ,(if (or upto exactly)
                          `(for ,g!-i from 1 to ,(or upto exactly)))
-                    (multiple-value-bind (,g!-subresult ,g!-position)
-                        (handler-case (let ((position position))
-                                        (values ,subexpr position))
-                          (simple-esrap-error () (finish)))
+		    (format t "Next TIMES: ")
+		    (print-iter-state the-iter)
+                    (multiple-value-bind (,g!-subresult ,g!-the-length)
+			(with-saved-iter-state (the-iter)
+			  (format t "   Inside subexpression:~%")
+			  (handler-case (let ((the-length 0))
+					  (let ((subexpr ,subexpr))
+					    (format t "    succeeding ~s ~a~%" subexpr the-length)
+					    (print-iter-state the-iter)
+					    (values subexpr the-length)))
+			    (simple-esrap-error ()
+			      (format t "    failing~%")
+			      (restore-iter-state)
+			      (finish))))
                       (if-first-time nil
-                                     (if (equal ,g!-position position)
+                                     (if (equal ,g!-the-length 0)
                                          (terminate)))
                       (push ,g!-subresult ,g!-result)
-                      (setf position ,g!-position))
+                      (incf the-length ,g!-the-length))
                     (finally (if ,condition
                                  (return (make-result (nreverse ,g!-result)))
                                  (fail-parse "Greedy repetition failed.")))))))
@@ -189,40 +198,36 @@
   `(progn ,start (prog1 ,meat ,end)))
 
 (defmacro! ? (subexpr)
-  `(multiple-value-bind (,g!-result ,g!-position)
+  `(multiple-value-bind (,g!-result ,g!-the-length)
        (block ,g!-?
-         (let ((position position))
+         (let ((the-length 0))
            (handler-case ,subexpr
              (simple-esrap-error () (values nil nil))
              (:no-error (result) (return-from ,g!-? (make-result result))))))
-     (when ,g!-position
-       (setf position ,g!-position))
+     (when ,g!-the-length
+       (incf the-length ,g!-the-length))
      ,g!-result))
 
 (defmacro & (subexpr)
-  `(make-result (let ((position position))
+  `(make-result (let ((the-length 0))
                   ,subexpr)))
 
 (defmacro -> (subexpr)
   (if (and (symbolp subexpr) (equal (string subexpr) "EOF"))
-      `(if (equal end position)
-           (make-result nil)
-           (fail-parse "not at end-of-file"))
-      `(progn (let ((position position))
+      `(descend-with-rule 'eof)
+      `(progn (let ((the-length 0))
 		,subexpr)
 	      (make-result nil))))
 
 (defmacro! <- (subexpr)
   (if (and (symbolp subexpr) (equal (string subexpr) "SOF"))
-      `(if (equal 0 position)
-           (make-result nil)
-           (fail-parse "not at start-of-file"))
-      `(let ((,g!-old-position position)
-             (position (1- position)))
+      `(descend-with-rule 'sof)
+      `(let ((the-length 0))
+	 (rel-rewind the-iter)
          (let ((,g!-result ,subexpr))
-           (if (equal ,g!-old-position position)
+           (if (equal the-length 1)
                (make-result nil)
-               (fail-parse "Parsing of subexpr took more than 1 char."))))))
+               (fail-parse "Parsing of subexpr took more than 1 token."))))))
 
 (defmacro! cond-parse (&rest clauses)
   `(|| ,@(mapcar (lambda (clause)

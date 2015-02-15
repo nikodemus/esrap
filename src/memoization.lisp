@@ -68,18 +68,16 @@
 (defun failed-parse-p (e)
   (typep e 'simple-esrap-error))
 
-;;; SYMBOL, POSITION, and CACHE must all be lexical variables!
-(defmacro! with-cached-result ((symbol position text &rest args) &body forms)
+(defmacro! with-cached-result ((symbol &rest args) &body forms)
   `(let* ((,g!-cache *cache*)
           (,g!-args (list ,@args))
-          (,g!-position ,position)
+          (,g!-position (+ the-position the-length))
           (,g!-result (get-cached ',symbol ,g!-position ,g!-args ,g!-cache))
           (*nonterminal-stack* (cons ',symbol *nonterminal-stack*)))
      ;; (format t "hashassoc ~a~%" (hash->assoc ,g!-cache))
      ;; (format t "sym: ~a pos: ~a res: ~a~%" ',symbol ,g!-position ,g!-result)
      (cond ((eq :left-recursion ,g!-result)
             (error 'left-recursion
-                   :text ,text
                    :position ,g!-position
                    :nonterminal ',symbol
                    :path (reverse *nonterminal-stack*)))
@@ -91,14 +89,14 @@
             ;; then compute the result and cache that.
             (setf (get-cached ',symbol ,g!-position ,g!-args ,g!-cache) :left-recursion)
             ;; (format t "hashassoc 2 ~a~%" (hash->assoc ,g!-cache))
-            (multiple-value-bind (result position) (handler-case (locally ,@forms)
+            (multiple-value-bind (result length) (handler-case (locally ,@forms)
                                                      (simple-esrap-error (e) e))
-              ;; POSITION is non-NIL only for successful parses
-              (if position
+              ;; LENGTH is non-NIL only for successful parses
+              (if length
                   (progn (setf (get-cached ',symbol ,g!-position ,g!-args ,g!-cache)
-                               (cons result position))
+                               (cons result length))
                          ;; (format t "hashassoc 2.5 ~a~%" (hash->assoc ,g!-cache))
-                         (values result position))
+                         (values result length))
                   (progn (setf (get-cached ',symbol ,g!-position ,g!-args ,g!-cache)
                                result)
                          ;; (format t "hashassoc 3 ~a~%" (hash->assoc ,g!-cache))

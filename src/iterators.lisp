@@ -114,6 +114,17 @@
 	    ((> new-pos (fill-pointer vector))
 	     (error "New position is greater than cache range, and than read-from-stream value"))
 	    (t (setf cached-pos new-pos))))))
+
+(defun rel-rewind (cache-iterator &optional (delta 1))
+  "Relative rewind"
+  (with-slots (cached-vals cached-pos) cache-iterator
+    (with-slots (vector start-pointer) cached-vals
+      (cond ((< (- cached-pos delta) start-pointer)
+	     (error "New position is less than (soft) beginning of the array."))
+	    ((> (- cached-pos delta) (fill-pointer vector))
+	     (error "New position is greater than cache range, and than read-from-stream value"))
+	    (t (setf cached-pos (- cached-pos delta)))))))
+
   
 (defmethod next-iter ((iter cache-iterator))
   (with-slots (cached-vals cached-pos sub-iter) iter
@@ -133,3 +144,28 @@
 	    (,kwd ,var next (let ((next-val (handler-case (next-iter ,g!-iter)
 					      (stop-iteration () (terminate)))))
 			      next-val)))))
+
+(defgeneric start-of-iter-p (iter)
+  (:documentation "T if the given iter is at the start. True by default."))
+(defmethod start-of-iter-p ((iter t))
+  t)
+
+(defmethod start-of-iter-p ((iter cache-iterator))
+  (with-slots (cached-pos cached-vals) iter
+    (with-slots (start-pos) cached-vals
+      (equal start-pos cached-pos))))
+
+(defparameter the-iter nil)
+(defparameter the-length 0)
+(defparameter the-position 0)
+
+(defmacro! with-saved-iter-state ((iter) &body body)
+  `(let ((,g!-cached-pos (slot-value ,iter 'cached-pos)))
+     (flet ((restore-iter-state ()
+	      (rewind ,iter ,g!-cached-pos)))
+       ,@body)))
+
+(defun print-iter-state (cached-iter)
+  (with-slots (cached-vals cached-pos) cached-iter
+    (with-slots (start-pointer vector) cached-vals
+      (format t "Pos is: ~a, Start is: ~a, Cache contents is ~a~%" cached-pos start-pointer vector))))
