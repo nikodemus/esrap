@@ -52,6 +52,11 @@
 					   `(descend-with-rule ',sym))))))
 	 ,@body))
 
+(defmacro the-position-boundary (&body body)
+  `(let* ((the-position (+ the-position the-length))
+	  (the-length 0))
+     ,@body))
+
 (defun! make-rule-lambda (name args body)
   (multiple-value-bind (reqs opts rest kwds allow-other-keys auxs kwds-p) (parse-ordinary-lambda-list args)
     (declare (ignore kwds))
@@ -59,8 +64,7 @@
     (if allow-other-keys (error "&ALLOW-OTHER-KEYS is not supported"))
     (if auxs (error "&AUX variables are not supported, use LET"))
     `(named-lambda ,(intern (strcat "ESRAP-" name)) (,@args)
-       (let* ((the-position (+ the-position the-length))
-	      (the-length 0))
+       (the-position-boundary
 	 (with-cached-result (,name ,@reqs
 				    ,@(if rest
 					  `(,rest)
@@ -109,7 +113,7 @@
        (block ,g!-ordered-choice
          (let (,g!-parse-errors)
            ,@(mapcar (lambda (clause)
-                       `(let ((the-length 0))
+                       `(the-position-boundary
 			  (print-iter-state the-iter)
 			  (with-saved-iter-state (the-iter)
 			    (handler-case (return-from ,g!-ordered-choice (values ,clause the-length))
@@ -128,24 +132,31 @@
 
 (defmacro ! (expr)
   "Succeeds, whenever parsing of EXPR fails. Does not consume, returns NIL, for compatibility with TEXT"
-  `(progn (let ((the-length 0))
-            (handler-case ,expr
-              (simple-esrap-error () nil)
-              (:no-error (result &optional the-length)
-                (declare (ignore result the-length))
-                (fail-parse "Clause under non-consuming negation succeeded."))))
+  `(progn (the-position-boundary
+	    (with-saved-iter-state (the-iter)
+	      (handler-case ,expr
+		(simple-esrap-error ()
+		  (restore-iter-state)
+		  nil)
+		(:no-error (result &optional the-length)
+		  (declare (ignore result the-length))
+		  (fail-parse "Clause under non-consuming negation succeeded.")))))
           (make-result nil 0)))
 
 (defmacro !! (expr)
   "Succeeds, whenever parsing of EXPR fails. Consumes, assumes than EXPR parses just one character."
-  `(progn (let ((the-length 0))
-            (handler-case ,expr
-              (simple-esrap-error () nil)
-              (:no-error (result &optional the-length)
-                (declare (ignore result the-length))
-                (fail-parse "Clause under consuming negation succeeded."))))
+  `(progn (the-position-boundary
+	    (with-saved-iter-state (the-iter)
+	      (handler-case ,expr
+		(simple-esrap-error ()
+		  (restore-iter-state)
+		  nil)
+		(:no-error (result &optional the-length)
+		  (declare (ignore result the-length))
+		  (fail-parse "Clause under consuming negation succeeded.")))))
 	  ;; TODO : here was a check about EOF. How should I properly address this with streams?
-	  (make-result 'caboom! 1)))
+	  (if (not (eof-p))
+	      (descend-with-rule 'any-token))))
               
 
 (defmacro! times (subexpr &key from upto exactly)
@@ -158,8 +169,7 @@
                     (multiple-value-bind (,g!-subresult ,g!-the-length)
 			(with-saved-iter-state (the-iter)
 			  (format t "   Inside subexpression:~%")
-			  (handler-case (let* ((the-position (+ the-position the-length))
-					       (the-length 0))
+			  (handler-case (the-position-boundary
 					  (let ((subexpr ,subexpr))
 					    (format t "    succeeding ~s ~a~%" subexpr the-length)
 					    (print-iter-state the-iter)
@@ -202,30 +212,41 @@
 (defmacro! ? (subexpr)
   `(multiple-value-bind (,g!-result ,g!-the-length)
        (block ,g!-?
-         (let ((the-length 0))
-           (handler-case ,subexpr
-             (simple-esrap-error () (values nil nil))
-             (:no-error (result) (return-from ,g!-? (make-result result))))))
+         (the-position-boundary
+	   (with-saved-iter-state (the-iter)
+	     (handler-case ,subexpr
+	       (simple-esrap-error ()
+		 (restore-iter-state)
+		 (values nil nil))
+	       (:no-error (result) (return-from ,g!-? (make-result result the-length)))))))
      (when ,g!-the-length
        (incf the-length ,g!-the-length))
      ,g!-result))
 
 (defmacro & (subexpr)
-  `(make-result (let ((the-length 0))
-                  ,subexpr)))
+  `(make-result (the-position-boundary
+		  (with-saved-iter-state (the-iter)
+		    (let ((it ,subexpr))
+		      (restore-iter-state)
+		      it)))))
+			
 
 (defmacro -> (subexpr)
   (if (and (symbolp subexpr) (equal (string subexpr) "EOF"))
-      `(descend-with-rule 'eof)
-      `(progn (let ((the-length 0))
-		,subexpr)
+      `(progn (descend-with-rule 'eof) nil)
+      `(progn (the-position-boundary
+		(with-saved-iter-state (the-iter)
+		  ,subexpr
+		  (restore-iter-state)))
 	      (make-result nil))))
 
 (defmacro! <- (subexpr)
   (if (and (symbolp subexpr) (equal (string subexpr) "SOF"))
-      `(descend-with-rule 'sof)
-      `(let ((the-length 0))
-	 (rel-rewind the-iter)
+      `(progn (descend-with-rule 'sof) nil)
+      `(the-position-boundary
+	 (handler-case (rel-rewind the-iter)
+	   (buffer-error ()
+	     (fail-parse "Can't rewind back even by 1 token")))
          (let ((,g!-result ,subexpr))
            (if (equal the-length 1)
                (make-result nil)

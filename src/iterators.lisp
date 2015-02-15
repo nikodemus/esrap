@@ -33,11 +33,18 @@
   (:documentation "Pop the last element of the buffer, but not before the start pointer"))
 
 
+(define-condition buffer-error (error)
+  ((msg :initarg :msg :initform nil)))
+
+(defun buffer-error (str)
+  (error 'buffer-error :msg str))
+
+
 (defmethod soft-shrink ((obj buffer-vector) (num-elts-discarded integer))
   (with-slots (vector start-pointer) obj
     (let ((fill-pointer (fill-pointer vector)))
       (if (> (+ start-pointer num-elts-discarded) fill-pointer)
-	  (error "Attempt to soft-shrink buffer more than its active length")
+	  (buffer-error "Attempt to soft-shrink buffer more than its active length")
 	  (incf start-pointer num-elts-discarded)))))
 
 (defun calc-new-buffer-length (old-buffer-vector start-pointer)
@@ -64,7 +71,7 @@
 (defmethod buffer-pop ((obj buffer-vector))
   (with-slots (vector start-pointer) obj
     (if (equal start-pointer (fill-pointer vector))
-	(error "Attempt to pop from vector of zero (soft) length.")
+	(buffer-error "Attempt to pop from vector of zero (soft) length.")
 	(vector-pop obj))))
 
 
@@ -110,9 +117,9 @@
       (when (null new-pos)
 	(setf new-pos start-pointer))
       (cond ((< new-pos start-pointer)
-	     (error "New position is less than (soft) beginning of the array."))
+	     (buffer-error "New position is less than (soft) beginning of the array."))
 	    ((> new-pos (fill-pointer vector))
-	     (error "New position is greater than cache range, and than read-from-stream value"))
+	     (buffer-error "New position is greater than cache range, and than read-from-stream value"))
 	    (t (setf cached-pos new-pos))))))
 
 (defun rel-rewind (cache-iterator &optional (delta 1))
@@ -120,9 +127,9 @@
   (with-slots (cached-vals cached-pos) cache-iterator
     (with-slots (vector start-pointer) cached-vals
       (cond ((< (- cached-pos delta) start-pointer)
-	     (error "New position is less than (soft) beginning of the array."))
+	     (buffer-error "New position is less than (soft) beginning of the array."))
 	    ((> (- cached-pos delta) (fill-pointer vector))
-	     (error "New position is greater than cache range, and than read-from-stream value"))
+	     (buffer-error "New position is greater than cache range, and than read-from-stream value"))
 	    (t (setf cached-pos (- cached-pos delta)))))))
 
   
@@ -165,7 +172,7 @@
 	      (rewind ,iter ,g!-cached-pos)))
        ,@body)))
 
-(defun print-iter-state (cached-iter)
+(defun print-iter-state (&optional (cached-iter the-iter))
   (with-slots (cached-vals cached-pos) cached-iter
     (with-slots (start-pointer vector) cached-vals
       (format t "Pos is: ~a, Start is: ~a, Cache contents is ~a, the-pos is: ~a, the-length is: ~a~%"

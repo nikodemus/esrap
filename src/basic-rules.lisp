@@ -31,14 +31,23 @@
 (defmacro any-string (length)
   `(descend-with-rule 'any-string ,length))
 
+(def-nocontext-rule any-token ()
+  (make-result (handler-case (next-iter the-iter)
+		 (stop-iteration ()
+		   (fail-parse (literal-string "EOF reached while trying to parse any token."))))
+	       1))
+  
 
 (def-nocontext-rule character (char)
   (let ((it (handler-case (next-iter the-iter)
 	      (stop-iteration () (fail-parse (literal-string "EOF reached while trying to parse character."))))))
+    (format t (literal-string "        in character: ~s ~s~%") it char)
+    (print-iter-state the-iter)
     (if (not char)
 	(make-result it 1)
 	(if (char= it char)
-	    (make-result it 1)
+	    (progn (format t (literal-string "         succeeding in character!~%"))
+		   (make-result it 1))
 	    (fail-parse-format (literal-string "Char ~a is not equal to desired char ~a") it char)))))
 
 (def-nocontext-rule string (string)

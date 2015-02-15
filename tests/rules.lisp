@@ -78,7 +78,11 @@
                         (list (? whitespace) (|| (& #\,) (! character))))))
 
 (defrule list-of-integers ()
-  (let ((it (|| (list integer #\, list-of-integers)
+  (let ((it (|| (list integer
+		      #\,
+		      (progn (format t (literal-string "I'm here!~%"))
+			     (esrap-liquid::print-iter-state)
+			     list-of-integers))
                 integer)))
     (if (integerp it)
         (list it)

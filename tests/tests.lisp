@@ -22,6 +22,9 @@
   )
 
 (test smoke
+  (is (equal "" (parse 'empty-line #?"\n")))
+  (is (equal "asdf" (parse 'trimmed-line #?"asdf")))
+  (is (equal "asdf" (parse 'trimmed-line #?"   asdf   ")))
   (is (equal '("1," "2," "" "3," "4.")
              (parse 'trimmed-lines "1,
                                     2,
