@@ -265,5 +265,5 @@
   #\)
   (cons c!-int c!-rc))
 
-
-
+(defrule triple-a ()
+  (list #\a #\a #\a))
