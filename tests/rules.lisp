@@ -267,3 +267,8 @@
 
 (defrule triple-a ()
   (list #\a #\a #\a))
+
+(defrule abc-or-def ()
+  (|| (list #\a #\b #\c)
+      (list #\d #\e #\f)))
+

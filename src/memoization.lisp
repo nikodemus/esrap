@@ -81,13 +81,15 @@
                    :position ,g!-position
                    :nonterminal ',symbol
                    :path (reverse *nonterminal-stack*)))
-           (,g!-result (format t "Using result from cache: ~a (~{~a~^ ~}) ~a ~a~%"
-			       ',symbol ,g!-args ,g!-position ,g!-result)
+           (,g!-result (if-debug "~a (~{~s~^ ~}) ~a ~a: CACHED" ',symbol ,g!-args ,g!-position ,g!-result)
+		       (print-iter-state the-iter)
 		       (if (failed-parse-p ,g!-result)
                            (error ,g!-result)
-                           (values (car ,g!-result) (cdr ,g!-result))))
+			   (progn (fast-forward the-iter (cdr ,g!-result))
+				  (values (car ,g!-result) (cdr ,g!-result)))))
            (t
-	    (format t "Calculating result anew: ~a (~{~a~^ ~}) ~a ~a~%" ',symbol ,g!-args ,g!-position ,g!-result)
+	    (if-debug "~a (~{~s~^ ~}) ~a ~a: NEW" ',symbol ,g!-args ,g!-position ,g!-result)
+	    (print-iter-state the-iter)
             ;; First mark this pair with :LEFT-RECURSION to detect left-recursion,
             ;; then compute the result and cache that.
             (setf (get-cached ',symbol ,g!-position ,g!-args ,g!-cache) :left-recursion)
