@@ -38,6 +38,12 @@
 	       ,@args)))
       
 
+(defun if-debug-fun (format-str &rest args)
+  (if *debug*
+      (apply #'format (append (list t (join "" "~a" format-str "~%")
+				    (make-string *tracing-indent* :initial-element #\space))
+			      args))))
+  
 
 (define-condition esrap-error (parse-error)
   ((text :initarg :text :initform nil :reader esrap-error-text)
@@ -108,11 +114,11 @@ the error occurred."))
 
 (defmacro fail-parse-format (&optional (reason "No particular reason.") &rest args)
   `(let ((formatted-reason (apply #'format `(nil ,,reason ,,@args))))
-     (if-debug "fail: ~a" formatted-reason)
+     (if-debug "fail: ~a P ~a L ~a" formatted-reason the-position the-length)
      (simple-esrap-error (+ the-position the-length) formatted-reason ,reason ,@args)))
 
 (defmacro fail-parse (&optional (reason "No particular reason."))
-  `(progn (if-debug "fail: ~a" ,reason)
+  `(progn (if-debug "fail: ~a: P ~a L ~a" ,reason the-position the-length)
 	  (simple-esrap-error (+ the-position the-length) ,reason ,reason)))
 
 (define-condition left-recursion (esrap-error)

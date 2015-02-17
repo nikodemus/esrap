@@ -16,7 +16,7 @@
             ,symbol ,args ,@body))))
 
 (defun install-common-rules (hash-table)
-  (let ((common-rules '(any-string character string)))
+  (let ((common-rules '(any-string character string eof sof any-token)))
     (iter (for rule in common-rules)
 	  (setf (gethash rule hash-table)
 		(gethash rule *rules*)))))

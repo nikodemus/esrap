@@ -60,9 +60,14 @@ are allowed only if JUNK-ALLOWED is true."
         (gethash 'parse-token-iter cl-read-macro-tokens::*read-macro-tokens-instances*)
 	(make-instance 'parse-reader-class
 		       :name 'parse-token-iter))
-  (setf (gethash 'parse-token-iter *read-macro-tokens*)
+  (setf (gethash 'parse cl-read-macro-tokens::*read-macro-tokens-classes*)
+	'parse-reader-class
+        (gethash 'parse cl-read-macro-tokens::*read-macro-tokens-instances*)
+	(make-instance 'parse-reader-class
+		       :name 'parse))
+  (setf (gethash 'parse *read-macro-tokens*)
         (lambda (stream token)
-          (read-handler (gethash 'parse-token-iter cl-read-macro-tokens::*read-macro-tokens-instances*)
+          (read-handler (gethash 'parse cl-read-macro-tokens::*read-macro-tokens-instances*)
                         stream token))))
 
 

@@ -16,6 +16,10 @@
       (rel-rewind the-iter)
       (fail-parse (literal-string "Not at the end of token stream.")))))
 
+(defun eof-p ()
+  (handler-case (descend-with-rule 'eof)
+    (simple-esrap-error () nil)))
+
 (def-nocontext-rule sof ()
   (if (start-of-iter-p the-iter)
       (make-result 'sof)
