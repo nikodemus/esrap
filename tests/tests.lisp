@@ -184,7 +184,8 @@
   (is (equal '("a" nil "b") (parse '(list "a" (-> "b") "b") "ab"))))
 
 (test preceded-by-not-gen
-  (is (equal '("a" nil "b") (parse '(list "a" (<- "a") "b") "ab"))))
+  (is (equal '("a" nil "b") (parse '(list "a" (<- "a") "b") "ab")))
+  (is (equal '("a" "b") (parse '(list "a" (|| (<- "b") "b")) "ab"))))
 
 
 (test esrap-env
@@ -241,3 +242,5 @@
 				 (iter (for c in-iter iter)
 				       (collect c))))))))
 
+(test start-of-file
+  (is (equal "a" (parse '(progn esrap-liquid::sof "a") "a"))))

@@ -118,7 +118,7 @@
 	   (let (,g!-parse-errors)
 	     ,@(mapcar (lambda (clause)
 			 `(the-position-boundary
-			    ;; (print-iter-state the-iter)
+			    (print-iter-state)
 			    (with-saved-iter-state (the-iter)
 			      (handler-case (return-from ,g!-ordered-choice
 					      (let ((res ,clause))
@@ -268,7 +268,8 @@
 	  `(progn (descend-with-rule 'sof) nil)
 	  `(multiple-value-bind (,g!-res ,g!-len)
 	       (the-position-boundary
-		 (handler-case (rel-rewind the-iter)
+		 (handler-case (progn (rel-rewind the-iter)
+				      (decf the-position))
 		   (buffer-error ()
 		     (fail-parse "Can't rewind back even by 1 token")))
 		 (let ((,g!-result ,subexpr))

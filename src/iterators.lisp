@@ -172,8 +172,8 @@
 
 (defmethod start-of-iter-p ((iter cache-iterator))
   (with-slots (cached-pos cached-vals) iter
-    (with-slots (start-pos) cached-vals
-      (equal start-pos cached-pos))))
+    (with-slots (start-pointer) cached-vals
+      (equal start-pointer cached-pos))))
 
 (defparameter the-iter nil)
 (defparameter the-length 0)
