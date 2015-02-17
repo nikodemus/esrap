@@ -34,8 +34,10 @@
   (is (eql 123 (parse 'integer "  123")))
   (is (eql 123 (parse 'integer "  123  ")))
   (is (eql 123 (parse 'integer "123  ")))
-  (is (equal '(#\a #\b #\c) (parse abc-or-def "abc")))
-  (is (equal '(#\d #\e #\f) (parse abc-or-def "def")))
+  (is (equal '(#\a #\b #\c) (parse 'abc-or-def "abc")))
+  (is (equal '(#\d #\e #\f) (parse 'abc-or-def "def")))
+  (is (equal '(123 45) (parse 'list-of-integers "123,45")))
+  (is (equal '(1 2) (parse 'list-of-integers "1, 2")))
   (is (equal '(123 45 6789 0) (parse 'list-of-integers "123, 45  ,   6789, 0")))
   (is (equal '(123 45 6789 0) (parse 'list-of-integers "  123 ,45,6789, 0  "))))
 

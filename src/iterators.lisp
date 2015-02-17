@@ -132,6 +132,16 @@
 	     (buffer-error "New position is greater than cache range, and than read-from-stream value"))
 	    (t (setf cached-pos (- cached-pos delta)))))))
 
+(defun fast-forward (cache-iterator &optional (delta 1))
+  "Relative fast-forward"
+  (with-slots (cached-vals cached-pos) cache-iterator
+    (with-slots (vector start-pointer) cached-vals
+      (cond ((< (+ cached-pos delta) start-pointer)
+	     (buffer-error "New position is less than (soft) beginning of the array."))
+	    ((> (+ cached-pos delta) (fill-pointer vector))
+	     (buffer-error "New position is greater than cache range, and than read-from-stream value"))
+	    (t (setf cached-pos (+ cached-pos delta)))))))
+
   
 (defmethod next-iter ((iter cache-iterator))
   (with-slots (cached-vals cached-pos sub-iter) iter
@@ -175,5 +185,5 @@
 (defun print-iter-state (&optional (cached-iter the-iter))
   (with-slots (cached-vals cached-pos) cached-iter
     (with-slots (start-pointer vector) cached-vals
-      (format t "Pos is: ~a, Start is: ~a, Cache contents is ~a, the-pos is: ~a, the-length is: ~a~%"
-	      cached-pos start-pointer vector the-position the-length))))
+      (if-debug "  p ~a s ~a f ~a P ~a L ~a" 
+		cached-pos start-pointer (fill-pointer vector) the-position the-length))))
