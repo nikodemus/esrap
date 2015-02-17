@@ -48,7 +48,7 @@
 	(if (char= it char)
 	    (progn ;; (format t (literal-string "         succeeding in character!~%"))
 		   (make-result it 1))
-	    (fail-parse-format (literal-string "Char ~a is not equal to desired char ~a") it char)))))
+	    (fail-parse-format (literal-string "Char ~s is not equal to desired char ~s") it char)))))
 
 (def-nocontext-rule string (string)
   (let ((any-string (any-string (length string))))

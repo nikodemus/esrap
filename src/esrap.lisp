@@ -32,6 +32,7 @@
 			  (if junk-allowed
 			      (values nil 0)
 			      (error e))))))
+	  (if-debug "after tmp-rule")
 	  (when (not junk-allowed)
 	    (handler-case (descend-with-rule 'eof)
 	      (simple-esrap-error ()

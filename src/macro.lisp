@@ -10,11 +10,8 @@
   `(multiple-value-bind (,g!-it ,g!-got) (gethash ,o!-sym *rules*)
      (if (not ,g!-got)
          (error "Undefined rule: ~s" ,o!-sym)
-         (multiple-value-bind (result new-length)
-	     (tracing-level
-	       (funcall ,g!-it ,@args))
-           (incf the-length new-length)
-           result))))
+	 (tracing-level
+	   (funcall ,g!-it ,@args)))))
 
 (defmacro with-esrap-reader-context (&body body)
   `(let ((char-reader (get-dispatch-macro-character #\# #\\))
@@ -66,16 +63,14 @@
     (if allow-other-keys (error "&ALLOW-OTHER-KEYS is not supported"))
     (if auxs (error "&AUX variables are not supported, use LET"))
     `(named-lambda ,(intern (strcat "ESRAP-" name)) (,@args)
-       (the-position-boundary
-	 (with-cached-result (,name ,@reqs
-				    ,@(if rest
-					  `(,rest)
-					  (iter (for (opt-name opt-default opt-supplied-p) in opts)
-						(collect opt-name)
-						(if opt-supplied-p
-						    (collect opt-supplied-p)))))
-	   (values (progn ,@body)
-		   the-length))))))
+       (with-cached-result (,name ,@reqs
+				  ,@(if rest
+					`(,rest)
+					(iter (for (opt-name opt-default opt-supplied-p) in opts)
+					      (collect opt-name)
+					      (if opt-supplied-p
+						  (collect opt-supplied-p)))))
+	 ,@body))))
 
 
 (defmacro!! %defrule (name args &body body &environment env)
@@ -103,25 +98,32 @@
 	  (setf (gethash ',name *rule-context-sensitivity*) nil)))
 
 
-(defmacro! make-result (result &optional (length 0))
+(defmacro! make-result (result &optional (length 0) beginning)
   ;; We must preserve the semantics, that computation of results occurs before increment of length
   `(let ((,g!-result ,result))
-     (if-debug "success: ~s" ,g!-result)
-     (values ,g!-result (incf the-length ,length))))
+     (incf the-length ,length)
+     (if-debug "~asuccess: ~s ~a" ,(if beginning
+				       #?"$(beginning) "
+				       "")
+	       ,g!-result the-length)
+     ,g!-result))
 
 
 (defmacro! || (&rest clauses)
-  `(multiple-value-bind (,g!-result ,g!-the-length)
-       ;; All this tricky business with BLOCK just for automatic LENGTH tracking.
-       (block ,g!-ordered-choice
-	 (tracing-level
-	   (if-debug "||")
+  `(tracing-level
+     (if-debug "||")
+     (multiple-value-bind (,g!-result ,g!-the-length)
+	 ;; All this tricky business with BLOCK just for automatic LENGTH tracking.
+	 (block ,g!-ordered-choice
 	   (let (,g!-parse-errors)
 	     ,@(mapcar (lambda (clause)
 			 `(the-position-boundary
 			    ;; (print-iter-state the-iter)
 			    (with-saved-iter-state (the-iter)
-			      (handler-case (return-from ,g!-ordered-choice (values ,clause the-length))
+			      (handler-case (return-from ,g!-ordered-choice
+					      (let ((res ,clause))
+						;; (if-debug "|| pre-succeeding")
+						(values res the-length)))
 				(simple-esrap-error (e)
 				  (restore-iter-state)
 				  (push e ,g!-parse-errors))))))
@@ -129,10 +131,10 @@
 	     (fail-parse (joinl "~%"
 				(mapcar (lambda (x)
 					  (slot-value x 'reason))
-					(nreverse ,g!-parse-errors)))))))
-     ;; (format t "After ||: ~%") (print-iter-state the-iter)
-     (incf the-length ,g!-the-length)
-     ,g!-result))
+					(nreverse ,g!-parse-errors))))))
+       (if-debug "|| aftermath ~a ~a" the-length ,g!-the-length)
+       (incf the-length ,g!-the-length)
+       ,g!-result)))
   
 
 (defmacro ! (expr)
@@ -210,10 +212,12 @@
   `(times ,subexpr :from 1))
 
 (defmacro! pred (predicate subexpr)
-  `(let ((,g!-it ,subexpr))
-     (if (funcall ,predicate ,g!-it)
-         ,g!-it
-         (fail-parse "Predicate test failed"))))
+  `(tracing-level
+     (if-debug "PREDICATE")
+     (let ((,g!-it ,subexpr))
+       (if (funcall ,predicate ,g!-it)
+	   ,g!-it
+	   (fail-parse "Predicate test failed")))))
 
 (defmacro progm (start meat end)
   "Prog Middle."
@@ -221,16 +225,17 @@
 
 (defmacro! ? (subexpr)
   `(tracing-level
-     (if-debug "?")
+     (if-debug "? ~a ~a" the-position the-length)
      (multiple-value-bind (,g!-result ,g!-the-length)
 	 (block ,g!-?
 	   (the-position-boundary
+	     (print-iter-state)
 	     (with-saved-iter-state (the-iter)
 	       (handler-case ,subexpr
 		 (simple-esrap-error ()
 		   (restore-iter-state)
 		   (values nil nil))
-		 (:no-error (result) (return-from ,g!-? (make-result result the-length)))))))
+		 (:no-error (result) (return-from ,g!-? (values result the-length)))))))
        (when ,g!-the-length
 	 (incf the-length ,g!-the-length))
        ,g!-result)))

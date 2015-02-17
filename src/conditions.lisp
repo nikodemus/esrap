@@ -8,7 +8,7 @@
 (in-package :esrap-liquid)
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (defparameter *debug* t))
+  (defparameter *debug* nil))
 
 (defparameter *tracing-indent* 0)
 

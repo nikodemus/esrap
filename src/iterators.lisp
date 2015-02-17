@@ -36,8 +36,9 @@
 (define-condition buffer-error (error)
   ((msg :initarg :msg :initform nil)))
 
-(defun buffer-error (str)
-  (error 'buffer-error :msg str))
+(defun buffer-error (str &rest args)
+  (error 'buffer-error :msg (apply #'format (append (list nil str)
+						    args))))
 
 
 (defmethod soft-shrink ((obj buffer-vector) (num-elts-discarded integer))
@@ -137,9 +138,11 @@
   (with-slots (cached-vals cached-pos) cache-iterator
     (with-slots (vector start-pointer) cached-vals
       (cond ((< (+ cached-pos delta) start-pointer)
-	     (buffer-error "New position is less than (soft) beginning of the array."))
+	     (buffer-error "New position ~a is less than (soft) beginning of the array ~a."
+			   (+ cached-pos delta) start-pointer))
 	    ((> (+ cached-pos delta) (fill-pointer vector))
-	     (buffer-error "New position is greater than cache range, and than read-from-stream value"))
+	     (buffer-error "New position ~a is greater than cache range, and than read-from-stream value ~a"
+			   (+ cached-pos delta) (fill-pointer vector)))
 	    (t (setf cached-pos (+ cached-pos delta)))))))
 
   

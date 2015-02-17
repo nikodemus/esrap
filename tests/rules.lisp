@@ -80,7 +80,7 @@
 (defrule list-of-integers ()
   (let ((it (|| (list integer
 		      #\,
-		      (progn (format t (literal-string "I'm here!~%"))
+		      (progn ;; (format t (literal-string "I'm here!~%"))
 			     (esrap-liquid::print-iter-state)
 			     list-of-integers))
                 integer)))
