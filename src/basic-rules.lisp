@@ -41,12 +41,12 @@
 (def-nocontext-rule character (char)
   (let ((it (handler-case (next-iter the-iter)
 	      (stop-iteration () (fail-parse (literal-string "EOF reached while trying to parse character."))))))
-    (format t (literal-string "        in character: ~s ~s~%") it char)
-    (print-iter-state the-iter)
+    ;; (format t (literal-string "        in character: ~s ~s~%") it char)
+    ;; (print-iter-state the-iter)
     (if (not char)
 	(make-result it 1)
 	(if (char= it char)
-	    (progn (format t (literal-string "         succeeding in character!~%"))
+	    (progn ;; (format t (literal-string "         succeeding in character!~%"))
 		   (make-result it 1))
 	    (fail-parse-format (literal-string "Char ~a is not equal to desired char ~a") it char)))))
 
@@ -58,7 +58,5 @@
 			   any-string
 			   string))))
 
-(defun joinl (joinee lst)
-  (format nil (strcat "~{~a~^" joinee "~}") lst))
 
 

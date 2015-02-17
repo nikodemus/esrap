@@ -10,7 +10,9 @@
   `(multiple-value-bind (,g!-it ,g!-got) (gethash ,o!-sym *rules*)
      (if (not ,g!-got)
          (error "Undefined rule: ~s" ,o!-sym)
-         (multiple-value-bind (result new-length) (funcall ,g!-it ,@args)
+         (multiple-value-bind (result new-length)
+	     (tracing-level
+	       (funcall ,g!-it ,@args))
            (incf the-length new-length)
            result))))
 
@@ -82,7 +84,7 @@
   (with-esrap-variable-transformer
     (let ((c!-vars (make-hash-table)))
       (declare (special c!-vars))
-      (format t "I'm starting to actually expand!~%")
+      (format t "I'm starting to actually expand ~a!~%" name)
       ;; TODO: bug - C!-vars values are kept between different execution of a rule!
       (let ((pre-body (macroexpand-cc-all-transforming-undefs
 		       (make-rule-lambda name args body)
@@ -104,6 +106,7 @@
 (defmacro! make-result (result &optional (length 0))
   ;; We must preserve the semantics, that computation of results occurs before increment of length
   `(let ((,g!-result ,result))
+     (if-debug "success: ~s" ,g!-result)
      (values ,g!-result (incf the-length ,length))))
 
 
@@ -111,81 +114,88 @@
   `(multiple-value-bind (,g!-result ,g!-the-length)
        ;; All this tricky business with BLOCK just for automatic LENGTH tracking.
        (block ,g!-ordered-choice
-         (let (,g!-parse-errors)
-           ,@(mapcar (lambda (clause)
-                       `(the-position-boundary
-			  (print-iter-state the-iter)
-			  (with-saved-iter-state (the-iter)
-			    (handler-case (return-from ,g!-ordered-choice (values ,clause the-length))
-			      (simple-esrap-error (e)
-				(restore-iter-state)
-				(push e ,g!-parse-errors))))))
-                     clauses)
-           (fail-parse (joinl "~%"
-                              (mapcar (lambda (x)
-                                        (slot-value x 'reason))
-                                      (nreverse ,g!-parse-errors))))))
-     (format t "After ||: ~%") (print-iter-state the-iter)
+	 (tracing-level
+	   (if-debug "||")
+	   (let (,g!-parse-errors)
+	     ,@(mapcar (lambda (clause)
+			 `(the-position-boundary
+			    ;; (print-iter-state the-iter)
+			    (with-saved-iter-state (the-iter)
+			      (handler-case (return-from ,g!-ordered-choice (values ,clause the-length))
+				(simple-esrap-error (e)
+				  (restore-iter-state)
+				  (push e ,g!-parse-errors))))))
+		       clauses)
+	     (fail-parse (joinl "~%"
+				(mapcar (lambda (x)
+					  (slot-value x 'reason))
+					(nreverse ,g!-parse-errors)))))))
+     ;; (format t "After ||: ~%") (print-iter-state the-iter)
      (incf the-length ,g!-the-length)
      ,g!-result))
   
 
 (defmacro ! (expr)
   "Succeeds, whenever parsing of EXPR fails. Does not consume, returns NIL, for compatibility with TEXT"
-  `(progn (the-position-boundary
-	    (with-saved-iter-state (the-iter)
-	      (handler-case ,expr
-		(simple-esrap-error ()
-		  (restore-iter-state)
-		  nil)
-		(:no-error (result &optional the-length)
-		  (declare (ignore result the-length))
-		  (fail-parse "Clause under non-consuming negation succeeded.")))))
-          (make-result nil 0)))
+  `(tracing-level
+     (if-debug "!")
+     (the-position-boundary
+       (with-saved-iter-state (the-iter)
+	 (handler-case ,expr
+	   (simple-esrap-error ()
+	     (restore-iter-state)
+	     nil)
+	   (:no-error (result &optional the-length)
+	     (declare (ignore result the-length))
+	     (fail-parse "Clause under non-consuming negation succeeded.")))))
+     (make-result nil 0)))
 
 (defmacro !! (expr)
   "Succeeds, whenever parsing of EXPR fails. Consumes, assumes than EXPR parses just one character."
-  `(progn (the-position-boundary
-	    (with-saved-iter-state (the-iter)
-	      (handler-case ,expr
-		(simple-esrap-error ()
-		  (restore-iter-state)
-		  nil)
-		(:no-error (result &optional the-length)
-		  (declare (ignore result the-length))
-		  (fail-parse "Clause under consuming negation succeeded.")))))
-	  ;; TODO : here was a check about EOF. How should I properly address this with streams?
-	  (if (not (eof-p))
-	      (descend-with-rule 'any-token))))
+  `(tracing-level
+     (if-debug "!!")
+     (the-position-boundary
+       (with-saved-iter-state (the-iter)
+	 (handler-case ,expr
+	   (simple-esrap-error ()
+	     (restore-iter-state)
+	     nil)
+	   (:no-error (result &optional the-length)
+	     (declare (ignore result the-length))
+	     (fail-parse "Clause under consuming negation succeeded.")))))
+     ;; TODO : here was a check about EOF. How should I properly address this with streams?
+     (if (not (eof-p))
+	 (descend-with-rule 'any-token))))
               
 
 (defmacro! times (subexpr &key from upto exactly)
   (flet ((frob (condition)
            `(let (,g!-result)
-              (iter ,(if (or upto exactly)
-                         `(for ,g!-i from 1 to ,(or upto exactly)))
-		    (format t "Next TIMES: ")
-		    (print-iter-state the-iter)
-                    (multiple-value-bind (,g!-subresult ,g!-the-length)
-			(with-saved-iter-state (the-iter)
-			  (format t "   Inside subexpression:~%")
-			  (handler-case (the-position-boundary
-					  (let ((subexpr ,subexpr))
-					    (format t "    succeeding ~s ~a~%" subexpr the-length)
-					    (print-iter-state the-iter)
-					    (values subexpr the-length)))
-			    (simple-esrap-error ()
-			      (format t "    failing~%")
-			      (restore-iter-state)
-			      (finish))))
-                      (if-first-time nil
-                                     (if (equal ,g!-the-length 0)
-                                         (terminate)))
-                      (push ,g!-subresult ,g!-result)
-                      (incf the-length ,g!-the-length))
-                    (finally (if ,condition
-                                 (return (make-result (nreverse ,g!-result)))
-                                 (fail-parse "Greedy repetition failed.")))))))
+	      (tracing-level
+		(iter ,(if (or upto exactly)
+			   `(for ,g!-i from 1 to ,(or upto exactly)))
+		      (if-debug "TIMES")
+		      ;; (print-iter-state the-iter)
+		      (multiple-value-bind (,g!-subresult ,g!-the-length)
+			  (with-saved-iter-state (the-iter)
+			    ;; (format t "   Inside subexpression:~%")
+			    (handler-case (the-position-boundary
+					    (let ((subexpr ,subexpr))
+					      ;; (format t "    succeeding ~s ~a~%" subexpr the-length)
+					      ;; (print-iter-state the-iter)
+					      (values subexpr the-length)))
+			      (simple-esrap-error ()
+				;; (format t "    failing~%")
+				(restore-iter-state)
+				(finish))))
+			(if-first-time nil
+				       (if (equal ,g!-the-length 0)
+					   (terminate)))
+			(push ,g!-subresult ,g!-result)
+			(incf the-length ,g!-the-length))
+		      (finally (if ,condition
+				   (return (make-result (nreverse ,g!-result)))
+				   (fail-parse "Greedy repetition failed."))))))))
     (cond (exactly (if (or from upto)
                        (error "keywords :EXACTLY and :FROM/:UPTO are mutually exclusive.")
                        (frob `(equal (length ,g!-result) ,exactly))))
@@ -210,47 +220,55 @@
   `(progn ,start (prog1 ,meat ,end)))
 
 (defmacro! ? (subexpr)
-  `(multiple-value-bind (,g!-result ,g!-the-length)
-       (block ,g!-?
-         (the-position-boundary
-	   (with-saved-iter-state (the-iter)
-	     (handler-case ,subexpr
-	       (simple-esrap-error ()
-		 (restore-iter-state)
-		 (values nil nil))
-	       (:no-error (result) (return-from ,g!-? (make-result result the-length)))))))
-     (when ,g!-the-length
-       (incf the-length ,g!-the-length))
-     ,g!-result))
+  `(tracing-level
+     (if-debug "?")
+     (multiple-value-bind (,g!-result ,g!-the-length)
+	 (block ,g!-?
+	   (the-position-boundary
+	     (with-saved-iter-state (the-iter)
+	       (handler-case ,subexpr
+		 (simple-esrap-error ()
+		   (restore-iter-state)
+		   (values nil nil))
+		 (:no-error (result) (return-from ,g!-? (make-result result the-length)))))))
+       (when ,g!-the-length
+	 (incf the-length ,g!-the-length))
+       ,g!-result)))
 
 (defmacro & (subexpr)
-  `(make-result (the-position-boundary
-		  (with-saved-iter-state (the-iter)
-		    (let ((it ,subexpr))
-		      (restore-iter-state)
-		      it)))))
+  `(tracing-level
+     (if-debug "&")
+     (make-result (the-position-boundary
+		    (with-saved-iter-state (the-iter)
+		      (let ((it ,subexpr))
+			(restore-iter-state)
+			it))))))
 			
 
 (defmacro -> (subexpr)
-  (if (and (symbolp subexpr) (equal (string subexpr) "EOF"))
-      `(progn (descend-with-rule 'eof) nil)
-      `(progn (the-position-boundary
-		(with-saved-iter-state (the-iter)
-		  ,subexpr
-		  (restore-iter-state)))
-	      (make-result nil))))
+  (tracing-level
+    (if-debug "->")
+    (if (and (symbolp subexpr) (equal (string subexpr) "EOF"))
+	`(progn (descend-with-rule 'eof) nil)
+	`(progn (the-position-boundary
+		  (with-saved-iter-state (the-iter)
+		    ,subexpr
+		    (restore-iter-state)))
+		(make-result nil)))))
 
 (defmacro! <- (subexpr)
-  (if (and (symbolp subexpr) (equal (string subexpr) "SOF"))
-      `(progn (descend-with-rule 'sof) nil)
-      `(the-position-boundary
-	 (handler-case (rel-rewind the-iter)
-	   (buffer-error ()
-	     (fail-parse "Can't rewind back even by 1 token")))
-         (let ((,g!-result ,subexpr))
-           (if (equal the-length 1)
-               (make-result nil)
-               (fail-parse "Parsing of subexpr took more than 1 token."))))))
+  (tracing-level
+    (if-debug "<-")
+    (if (and (symbolp subexpr) (equal (string subexpr) "SOF"))
+	`(progn (descend-with-rule 'sof) nil)
+	`(the-position-boundary
+	   (handler-case (rel-rewind the-iter)
+	     (buffer-error ()
+	       (fail-parse "Can't rewind back even by 1 token")))
+	   (let ((,g!-result ,subexpr))
+	     (if (equal the-length 1)
+		 (make-result nil)
+		 (fail-parse "Parsing of subexpr took more than 1 token.")))))))
 
 (defmacro! cond-parse (&rest clauses)
   `(|| ,@(mapcar (lambda (clause)
