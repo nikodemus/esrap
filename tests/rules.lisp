@@ -265,5 +265,6 @@
   #\)
   (cons c!-int c!-rc))
 
-
-
+(defrule abc-or-def ()
+  (|| (list #\a #\b #\c)
+      (list #\d #\e #\f)))
