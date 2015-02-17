@@ -185,7 +185,10 @@
 
 (test preceded-by-not-gen
   (is (equal '("a" nil "b") (parse '(list "a" (<- "a") "b") "ab")))
-  (is (equal '("a" "b") (parse '(list "a" (|| (<- "b") "b")) "ab"))))
+  (is (equal '("a" "b") (parse '(list "a" (|| (<- "b") "b")) "ab")))
+  (is (equal '(#\newline (esrap-liquid::eof)) (parse '(list #\newline
+						       (times (progn (<- #\newline) esrap-liquid::eof)))
+						     #?"\n"))))
 
 
 (test esrap-env

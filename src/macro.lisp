@@ -266,19 +266,15 @@
      (if-debug "<-")
      ,(if (and (symbolp subexpr) (equal (string subexpr) "SOF"))
 	  `(progn (descend-with-rule 'sof) nil)
-	  `(multiple-value-bind (,g!-res ,g!-len)
-	       (the-position-boundary
-		 (handler-case (progn (rel-rewind the-iter)
-				      (decf the-position))
-		   (buffer-error ()
-		     (fail-parse "Can't rewind back even by 1 token")))
-		 (let ((,g!-result ,subexpr))
-		   (declare (ignore ,g!-result))
-		   (if (not (equal the-length 1))
-		       (fail-parse "Parsing of subexpr took more than 1 token.")
-		       (values nil the-length))))
-	     (incf the-length ,g!-len)
-	     ,g!-res))))
+	  `(progn (the-position-boundary
+		    (handler-case (progn (rel-rewind the-iter)
+					 (decf the-position))
+		      (buffer-error ()
+			(fail-parse "Can't rewind back even by 1 token")))
+		    ,subexpr
+		    (if (not (equal the-length 1))
+			(fail-parse "Parsing of subexpr took more than 1 token.")))
+		  nil))))
 	     
 
 (defmacro! cond-parse (&rest clauses)
