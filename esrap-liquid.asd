@@ -15,7 +15,7 @@
   :description "A Packrat / Parsing Grammar / TDPL parser for Common Lisp."
   :licence "GPL"
   :depends-on (:alexandria :defmacro-enhance :iterate :rutils :cl-indeterminism :cl-read-macro-tokens
-			   #:cl-ppcre)
+			   #:cl-ppcre #:cl-interpol)
   :serial t
   :components ((:module "src"
                         :pathname "src/"

@@ -6,6 +6,8 @@
 
 (in-package #:esrap-liquid)
 
+(cl-interpol:enable-interpol-syntax)
+
 (defmacro! descend-with-rule (o!-sym &rest args)
   `(multiple-value-bind (,g!-it ,g!-got) (gethash ,o!-sym *rules*)
      (if (not ,g!-got)
