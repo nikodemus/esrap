@@ -14,41 +14,52 @@ Original idea is in this article:
 
     http://pdos.csail.mit.edu/~baford/packrat/thesis/
 
-What irked me is ESRAP:
-  - poor support of context-sensitive grammars (I was trying to implement parsing of YAML)
-    - specifically, when caching, context was not taken into considerations
-  - interface for defining rules was very rigid: defining of a syntactic structure of a rule
-    was done in a very limited DSL, extension of which required hacking of ESRAP itself
-  - when I started hacking ESRAP few more subtle things occured to me:
-    - custom codewalker was implemented to account for special syntax sugar
-    - due to this fact, compiler macros had to be used to obtain reasonable speed,n
-      which in turn prevented to define e.g. package-local rules.
+What I wanted to improve in ESRAP:
+  - add support of context-sensitive grammars (I was trying to implement parsing of YAML)
+    - specifically, when caching, context should be taken into considerations
+  - make interface for defining rules more flexible:
+    every now and then I needed a new feature of rule-defining DSL and it
+    required hacking of core ESRAP code
+  - like so many DSL-projects out there, ESRAP implemented its own codewalker,
+    and would *greatly* benfit from not doing so:
+    - so I wanted to somehow reuse CL codewalker
+    - in particular, this would allow definition of package-local rules and 
+      switch from interpreter mode to compiler mode. Theoretically, this would
+      make thing faster.
 
-That said, I started this project in an attempt to fix some of those drawbacks,
-mainly, rigidity, hence the name suffix "LIQUID".
+The adjective, which suits the most to what I wanted ESRAP to be is "liquid",
+so I added it and started hacking...
 
-What it has now:
+What I was able to do until now:
   - full support of context sensitivity: you can 'register' variables, which store the context,
     and their value is taken into account, while caching results
-  - no limited duplication of codewalking - to give characters, strings and symbols, that define rules,
-    'special' meaning, CL-READ-MACRO-TOKENS is used;
-    hence, ability to use *whole* CL, while defining rules - ESRAP-LIQUID is a 'proper' deformation of CL
-  - definition of a rule is not split into separate syntactic part (which can fail) and semantic part
-    (which cannot fail and may contain costly operations).
-    It is due to you, the writer, to perform costly operations in the end of rule flow, if you so wish
-  - rules may depend on additional arguments (such as CHARACTER rule, which has optional parameter,
-    that specifies, which character it matches).
-    That said, syntax of DEFRULE is now pretty much like syntax of DEFUN
+  - full reuse of CL's codewalker.
+    Special ESRAP syntax, which makes it so convenient in the first place,
+    is achieved with help of CL-READ-MACRO-TOKENS library;
+    hence, you are abile to use *whole* CL, while defining rules
+  - definition of a rule is not split into separate syntactic part and semantic part
+    It gives more flexibility, but also more opportunities to write suboptimal code
+    (e.g. the costly semantic operations may be performed for discarded results)
+  - rules may depend on additional arguments
+    (for example, CHARACTER rule, which accepts character it should match to)
+    So, syntax of DEFRULE is now very close to syntax of DEFUN
+  - STREAMING!!! Currenly I'm teaching ESRAP-LIQUID to work with streams
+    (and in general to parse lazily) Hence, soon it will be possible to actually
+    implement Lisp-reader with it (i.e., concisely)
+  - debugging is done by setting *DEBUG* variable to T and recompiling the package.
+    After that every parse outputs to stdout a progress of parsing in nice indented way,
+    which helps to untangle even most complicated bugs
 
 What's not yet done:
   - introspection features (description of a grammar)
   - case-insensitive terminals
+  - friendly parsing error reports
 
-Usage is best illustrated by examples, so here they are. For more examples,
+Here are some examples of use. For more examples,
 see example-sexp.lisp, example-symbol-table.lisp, example-very-context-sensitive.lisp.
-For even more real-life examples see my YAML parser https://github.com/mabragor/cl-yaclyaml.
-It makes extensive use of features, not found in original ESRAP and it would be very hard to
-implement otherwise.
+For more real-life examples see my YAML parser https://github.com/mabragor/cl-yaclyaml.
+The parsing part uses ESRAP-LIQUID extensively, in particular, in ways different from
+traditional ESRAP.
 
 ```lisp
 ; plain characters match to precisely that character in text
@@ -210,10 +221,10 @@ of rules defined at the same time.
 Capturing-variables
 -------------------
 
-Analogous to capturing groups in regexps, it is possible to capture
-results of parsing of named rules, to ease destructuring.
+Analogously to capturing groups in regexps, it is possible to capture
+results of parsing of named rules, to aid destructuring.
 
-Example: instead to clumsy
+Example: instead of clumsy
 
 ```lisp
 (define-rule dressed-rule-clumsy ()
@@ -234,4 +245,34 @@ I.e. result of parsing of rule with name MEAT is stored in variable C!-1,
 which is later accessed.
 
 See tests for examples of usage.
-Also see CL-MIZAR parsing.lisp, where this is used extensively.
+Also see CL-MIZAR parsing.lisp, where this is used a lot.
+
+
+Streaming
+---------
+
+Now I made critical morphing of the code, such that it is now usable to
+parse not only strings of fixed length, but also streams and, in general,
+iterators of tokens.
+
+Here I understand iterators Pythonic style, i.e. they are classes with defined
+NEXT-ITER method (the __next__ method in Python), that throws
+stop-iteration error (the StopIteration exception in Python) when there are
+no more values.
+
+Now the function PARSE (which accepts string) is just a wrapper around
+more general function PARSE-TOKEN-ITER (which accepts iterator of tokens)
+
+This is only the stub of fantastic possibilities it opens, but the
+hard part (change of architechture) is over and only cosmetics remain, which
+includes:
+  - PARSE-STREAM function, which accepts stream
+  - MK-PARSING-ITER, creates iterator, which (lazily) parses the token stream
+    - this should not only parse with a fixed rule, but also with different
+      rule each time, and with supplied iterator of rules to parse in turn
+    - it should be *convenient* to implement
+      - Lisp reader
+      - TeX lexer + TeX parser (yes, it should be convenient to work not only
+        on iterators of chars, but also on iterators of arbitrary tokens)
+      - combined TeX + Lisp reader
+    
