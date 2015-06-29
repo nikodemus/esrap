@@ -247,3 +247,9 @@
 
 (test start-of-file
   (is (equal "a" (parse '(progn esrap-liquid::sof "a") "a"))))
+
+;;; esrap-env
+
+(test esrap-env-print-case
+  (is (eq :quux foo-context-1))
+  (is-true (find-symbol "QUUX-FOO-CONTEXT-1-P")))
