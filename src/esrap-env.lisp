@@ -39,7 +39,7 @@
 		     (defrule ,symbol ,args ,@body))))
 	  (defmacro ,(symbolicate "REGISTER-" symbol "-CONTEXT")
 	      (context-var &rest plausible-contexts)
-	    `(progn (defparameter ,context-var ,(make-keyword (format nil "~a" (car plausible-contexts))))
+	    `(progn (defparameter ,context-var ,(make-keyword (car plausible-contexts)))
 		    ,@(mapcar (lambda (context-name)
 				(let ((pred-name (symbolicate context-name
 								     "-"
@@ -57,7 +57,7 @@
 				       ;; will not work here anyway
 				       (pred #',pred-name t)
 				       nil))))
-			      (mapcar (lambda (x) (format nil "~a" x)) plausible-contexts))
+			      plausible-contexts)
 		    (push ',context-var ,',(symbolicate symbol "-CONTEXTS"))))
 	  (defmacro!! ,(symbolicate symbol "-PARSE")
 	      (expression text &key (start nil start-p)
