@@ -252,3 +252,9 @@
   (is (equal "aaaaa" (parse '(text (most-full-parse (times #\a :exactly 3)
 				    (times #\a :exactly 5)))
 			    "aaaaa"))))
+
+;;; esrap-env
+
+(test esrap-env-print-case
+  (is (eq :quux foo-context-1))
+  (is-true (find-symbol "QUUX-FOO-CONTEXT-1-P")))

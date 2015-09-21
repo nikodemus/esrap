@@ -47,5 +47,5 @@
                (:file "tests")))
 
 (defmethod perform ((op test-op) (sys (eql (find-system :esrap-liquid))))
-  (load-system :esrap-tests)
+  (load-system :esrap-liquid-tests)
   (funcall (intern "RUN-TESTS" :esrap-liquid-tests)))
