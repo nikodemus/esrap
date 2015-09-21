@@ -138,7 +138,39 @@
        (if-debug "|| aftermath ~a ~a" the-length ,g!-the-length)
        (incf the-length ,g!-the-length)
        ,g!-result)))
-  
+
+(defmacro! most-full-parse (&rest clauses)
+  `(tracing-level
+     (if-debug "MOST-FULL-PARSE")
+     (multiple-value-bind (,g!-result ,g!-the-length)
+	 ;; All this tricky business with BLOCK just for automatic LENGTH tracking.
+	 (block ,g!-most-full-parse
+	   (let (,g!-parse-errors ,g!-successful-parses)
+	     ,@(mapcar (lambda (clause)
+			 `(the-position-boundary
+			    (print-iter-state)
+			    (with-saved-iter-state (the-iter)
+			      (handler-case ,clause
+				(simple-esrap-error (e)
+				  (restore-iter-state)
+				  (push e ,g!-parse-errors))
+				(:no-error (res)
+				  (restore-iter-state)
+				  (push (list res the-length) ,g!-successful-parses))))))
+		       clauses)
+	     (if ,g!-successful-parses
+		 (destructuring-bind (res length) (car (sort ,g!-successful-parses #'> :key #'cadr))
+		   (fast-forward the-iter length)
+		   (values res length))
+		 (progn (if-debug "|| before failing P ~a L ~a" the-position the-length)
+			(fail-parse (joinl "~%"
+					   (mapcar (lambda (x)
+						     (slot-value x 'reason))
+						   (nreverse ,g!-parse-errors))))))))
+       (if-debug "MOST-FULL-PARSE aftermath ~a ~a" the-length ,g!-the-length)
+       (incf the-length ,g!-the-length)
+       ,g!-result)))
+
 
 (defmacro ! (expr)
   "Succeeds, whenever parsing of EXPR fails. Does not consume, returns NIL, for compatibility with TEXT"

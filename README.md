@@ -159,12 +159,14 @@ ESRAP-LIQUID> (parse '(? #\a) "a")
 ```
 
 Other operators, defined by ESRAP-LIQUID, include:
- (character-ranges ranges) -- character ranges
- (& followed-by)           -- does not consume
- (-> followed-by-not-gen)  -- does not consume, produces NIL
- (<- preceded-by-not-gen)  -- succeeds, if preceeded by something of length 1, produces NIL
- (! not-followed-by)       -- does not consume
- (pred #'<predicate> expr) -- semantic parsing
+ - (character-ranges ranges) -- character ranges
+ - (& followed-by)           -- does not consume
+ - (-> followed-by-not-gen)  -- does not consume, produces NIL
+ - (<- preceded-by-not-gen)  -- succeeds, if preceeded by something of length 1, produces NIL
+ - (! not-followed-by)       -- does not consume
+ - (pred #'<predicate> expr) -- semantic parsing
+ - (most-full-parse &rest exprs) -- try to parse all subexpressions and choose the one than
+                                    consumed most
 
 
 Typical idioms:

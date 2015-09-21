@@ -12,6 +12,7 @@
   (:export
    #:enable-read-macro-tokens #:disable-read-macro-tokens
    #:! #:? #:& #:~ #:<- #:-> #:!! #:times #:postimes #:pred #:progm #:cond-parse #:character-ranges
+   #:most-full-parse
    #:match-start #:match-end
    #:literal-string #:literal-char
    #:register-context
