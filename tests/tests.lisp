@@ -86,6 +86,7 @@
     (parse 'left-recursion "l"))
   (handler-case (parse 'left-recursion "l")
     (esrap-liquid::left-recursion (condition)
+      (declare (ignorable condition))
       ;; (is (string= "l" (esrap-liquid::esrap-error-text condition)))
       ;; (is (= (esrap-liquid::esrap-error-position condition) 0))
       ;; (is (eq (esrap-liquid::left-recursion-nonterminal condition)

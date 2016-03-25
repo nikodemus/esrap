@@ -158,12 +158,13 @@
 	    (incf cached-pos)
 	    old-val)))))
 
-(defmacro-driver! (for var in-iter iter)
+(defmacro-driver (for var in-iter iter)
   (let ((kwd (if generate 'generate 'for)))
-    `(progn (with ,g!-iter = ,iter)
-	    (,kwd ,var next (let ((next-val (handler-case (next-iter ,g!-iter)
-					      (stop-iteration () (terminate)))))
-			      next-val)))))
+    (with-gensyms (g!-iter)
+      `(progn (with ,g!-iter = ,iter)
+	      (,kwd ,var next (let ((next-val (handler-case (next-iter ,g!-iter)
+						(stop-iteration () (terminate)))))
+				next-val))))))
 
 (defgeneric start-of-iter-p (iter)
   (:documentation "T if the given iter is at the start. True by default."))
@@ -179,11 +180,12 @@
 (defparameter the-length 0)
 (defparameter the-position 0)
 
-(defmacro! with-saved-iter-state ((iter) &body body)
-  `(let ((,g!-cached-pos (slot-value ,iter 'cached-pos)))
-     (flet ((restore-iter-state ()
-	      (rewind ,iter ,g!-cached-pos)))
-       ,@body)))
+(defmacro with-saved-iter-state ((iter) &body body)
+  (with-gensyms (g!-cached-pos)
+    `(let ((,g!-cached-pos (slot-value ,iter 'cached-pos)))
+       (flet ((restore-iter-state ()
+		(rewind ,iter ,g!-cached-pos)))
+	 ,@body))))
 
 (defun print-iter-state (&optional (cached-iter the-iter))
   (with-slots (cached-vals cached-pos) cached-iter

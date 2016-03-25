@@ -6,10 +6,9 @@
 
 (in-package :esrap-liquid)
 
-(defmacro! in-esrap-env (symbol)
+(defmacro in-esrap-env (symbol)
   `(eval-when (:compile-toplevel :load-toplevel :execute)
-     (defmacro!! ,e!-define-rule (symbol args &body body)
-         ()
+     (defmacro ,(intern "DEFINE-RULE") (symbol args &body body)
        `(,',(if symbol
                 (symbolicate "DEFINE-" symbol "-RULE")
                 'defrule)

@@ -50,50 +50,27 @@
 are allowed only if JUNK-ALLOWED is true."
   (parse-token-iter expression (mk-esrap-iter-from-string text start end) :junk-allowed junk-allowed))
 
-;; ;; Read behaviour of PARSE is different from that of usual reader macros,
-;; ;; but we want to DEFMACRO!! also capture it, hence define new reader class
-;; (eval-when (:compile-toplevel :load-toplevel :execute)
-;;   (defclass parse-reader-class (cl-read-macro-tokens::tautological-read-macro-token) ())
-;;   (defmethod read-handler ((obj parse-reader-class) stream token)
-;;     (let ((expression (with-esrap-reader-context
-;;                         (read stream t nil t))))
-;;       `(,(slot-value obj 'cl-read-macro-tokens::name) ,expression ,@(read-list-old stream token))))
-;;   (setf (gethash 'parse-token-iter cl-read-macro-tokens::*read-macro-tokens-classes*)
-;; 	'parse-reader-class
-;;         (gethash 'parse-token-iter cl-read-macro-tokens::*read-macro-tokens-instances*)
-;; 	(make-instance 'parse-reader-class
-;; 		       :name 'parse-token-iter))
-;;   (setf (gethash 'parse cl-read-macro-tokens::*read-macro-tokens-classes*)
-;; 	'parse-reader-class
-;;         (gethash 'parse cl-read-macro-tokens::*read-macro-tokens-instances*)
-;; 	(make-instance 'parse-reader-class
-;; 		       :name 'parse))
-;;   (setf (gethash 'parse *read-macro-tokens*)
-;;         (lambda (stream token)
-;;           (read-handler (gethash 'parse cl-read-macro-tokens::*read-macro-tokens-instances*)
-;;                         stream token))))
-
-
-(defmacro! character-ranges (&rest char-specs)
-  (macrolet ((fail ()
-               `(error "Character range specification is either a character or list of 2 characters, but got ~a."
-                       char-spec)))
-    (iter (for char-spec in char-specs)
-          (collect (cond ((characterp char-spec) `((char= ,g!-char ,char-spec) ,g!-char))
-                         ((consp char-spec)
-                          (destructuring-bind (start-char end-char) char-spec
-                            (if (and (characterp start-char)
-                                     (characterp end-char))
-                                `((and (>= (char-code ,g!-char) ,(char-code start-char))
-                                       (<= (char-code ,g!-char) ,(char-code end-char)))
-                                  ,g!-char)
-                                (fail))))
-                         (t (fail)))
-            into res)
-          (finally (return `(let ((,g!-char (descend-with-rule 'character nil)))
-                              (cond ,@res
-                                    (t (fail-parse-format "Character ~s does not belong to specified range"
-							  ,g!-char)))))))))
+(defmacro character-ranges (&rest char-specs)
+  (with-gensyms (g!-char)
+    (macrolet ((fail ()
+		 `(error "Character range specification is either a character or list of 2 characters, but got ~a."
+			 char-spec)))
+      (iter (for char-spec in char-specs)
+	    (collect (cond ((characterp char-spec) `((char= ,g!-char ,char-spec) ,g!-char))
+			   ((consp char-spec)
+			    (destructuring-bind (start-char end-char) char-spec
+			      (if (and (characterp start-char)
+				       (characterp end-char))
+				  `((and (>= (char-code ,g!-char) ,(char-code start-char))
+					 (<= (char-code ,g!-char) ,(char-code end-char)))
+				    ,g!-char)
+				  (fail))))
+			   (t (fail)))
+	      into res)
+	    (finally (return `(let ((,g!-char (descend-with-rule 'character nil)))
+				(cond ,@res
+				      (t (fail-parse-format "Character ~s does not belong to specified range"
+							    ,g!-char))))))))))
 
 (defvar *indentation-hint-table* nil)
 

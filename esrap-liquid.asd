@@ -11,11 +11,10 @@
 (in-package :esrap-liquid-system)
 
 (defsystem :esrap-liquid
-  :version "1.3" ; odd minor version numbers are for unstable versions
+  :version "2.1" ; odd minor version numbers are for unstable versions
   :description "A Packrat / Parsing Grammar / TDPL parser for Common Lisp."
   :licence "GPL"
-  :depends-on (:alexandria :defmacro-enhance :iterate :rutils :cl-indeterminism :cl-read-macro-tokens
-			   #:cl-ppcre #:cl-interpol)
+  :depends-on (#:alexandria #:iterate #:cl-ppcre #:cl-interpol)
   :serial t
   :components ((:module "src"
                         :pathname "src/"
@@ -38,7 +37,7 @@
 (defsystem :esrap-liquid-tests
   :description "Tests for ESRAP-LIQUID."
   :licence "GPL"
-  :depends-on (#:esrap-liquid #:fiveam #:cl-interpol #:cl-indeterminism)
+  :depends-on (#:esrap-liquid #:fiveam #:cl-interpol)
   :serial t
   :pathname "tests/"
   :components ((:file "package")

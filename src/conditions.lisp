@@ -29,9 +29,7 @@
 	 ,@body)
       `(progn ,@body)))
       
-(defmacro!! if-debug (format-str &rest args)
-    (with-macro-character (#\" (get-macro-character #\" nil))
-      (call-next-method))
+(defmacro if-debug (format-str &rest args)
   (if *debug*
       `(format t ,(join "" "~a" format-str "~%")
 	       (make-string *tracing-indent* :initial-element #\space)
@@ -120,18 +118,6 @@ the error occurred."))
 (defmacro fail-parse (&optional (reason "No particular reason."))
   `(progn (if-debug "fail: ~a: P ~a L ~a" ,reason the-position the-length)
 	  (simple-esrap-error (+ the-position the-length) ,reason ,reason)))
-
-(defun vanilla-string-char-reader (stream token)
-  (with-macro-character (#\" (get-macro-character #\" nil))
-    (with-dispatch-macro-character (#\# #\\ (get-dispatch-macro-character #\# #\\ nil))
-      `(,token ,@(read-list-old stream token)))))
-
-
-(setf (gethash 'fail-parse cl-read-macro-tokens:*read-macro-tokens*)
-      #'vanilla-string-char-reader
-      (gethash 'fail-parse-format cl-read-macro-tokens:*read-macro-tokens*)
-      #'vanilla-string-char-reader)
-
 
 (define-condition left-recursion (esrap-error)
   ((nonterminal :initarg :nonterminal :initform nil :reader left-recursion-nonterminal)

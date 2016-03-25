@@ -7,8 +7,7 @@
 (in-package #:cl-user)
 
 (defpackage :esrap-liquid
-  (:use #:cl #:alexandria #:defmacro-enhance #:iterate #:cl-indeterminism #:cl-read-macro-tokens)
-  (:shadowing-import-from #:rutils.string #:strcat)
+  (:use #:cl #:alexandria #:iterate)
   (:export
    #:! #:? #:& #:~ #:<- #:-> #:!! #:times #:postimes #:pred #:progm #:cond-parse #:character-ranges
    #:most-full-parse
