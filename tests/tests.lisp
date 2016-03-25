@@ -78,7 +78,7 @@
     (parse 'list-of-integers "1, ")))
 
 (test non-consuming-negation
-  (is (equal "foo" (parse '(text (list (! "bar") "foo")) "foo"))))
+  (is (equal "foo" (parse '(text (list (! (v "bar")) (v "foo"))) "foo"))))
 
 (test condition.2
   "Test signaling of `left-recursion' condition."
@@ -98,12 +98,12 @@
 (test negation
   "Test negation in rules."
   (let* ((text "FooBazBar")
-         (t1c (text (parse '(postimes (!! "Baz")) text :junk-allowed t)))
-         (t1e (text (parse '(pred #'identity (postimes (!! "Baz"))) text :junk-allowed t)))
-         (t2c (text (parse '(postimes (!! "Bar")) text :junk-allowed t)))
-         (t2e (text (parse '(pred #'identity (postimes (!! "Bar"))) text :junk-allowed t)))
-         (t3c (text (parse '(postimes (!! (|| "Bar" "Baz"))) text :junk-allowed t)))
-         (t3e (text (parse '(pred #'identity (postimes (!! (|| "Bar" "Baz")))) text :junk-allowed t))))
+         (t1c (text (parse '(postimes (!! (v "Baz"))) text :junk-allowed t)))
+         (t1e (text (parse '(pred #'identity (postimes (!! (v "Baz")))) text :junk-allowed t)))
+         (t2c (text (parse '(postimes (!! (v "Bar"))) text :junk-allowed t)))
+         (t2e (text (parse '(pred #'identity (postimes (!! (v "Bar")))) text :junk-allowed t)))
+         (t3c (text (parse '(postimes (!! (|| (v "Bar") (v "Baz")))) text :junk-allowed t)))
+         (t3e (text (parse '(pred #'identity (postimes (!! (|| (v "Bar") (v "Baz"))))) text :junk-allowed t))))
     (is (equal "Foo" t1c))
     (is (equal "Foo" t1e))
     (is (equal "FooBaz" t2c))
@@ -128,9 +128,9 @@
 ;;                . "baz") (parse 'around.2 "{{baz}}"))))
 
 (test optional-test
-  (is (equal '(#\b 2) (multiple-value-list (parse '(? (progn #\a #\b)) "ab"))))
-  (is (equal '(nil 0) (multiple-value-list (parse '(? (progn #\a #\b)) "ac" :junk-allowed t))))
-  (is (equal '(nil 0) (multiple-value-list (parse '(? (progn #\a #\b #\c)) "abd" :junk-allowed t)))))
+  (is (equal '(#\b 2) (multiple-value-list (parse '(? (progn (v #\a) (v #\b))) "ab"))))
+  (is (equal '(nil 0) (multiple-value-list (parse '(? (progn (v #\a) (v #\b))) "ac" :junk-allowed t))))
+  (is (equal '(nil 0) (multiple-value-list (parse '(? (progn (v #\a) (v #\b) (v #\c))) "abd" :junk-allowed t)))))
 
 
 (test character-range-test
@@ -139,17 +139,17 @@
   (is (equal '(#\a #\b #\-) (parse '(times (character-ranges (#\a #\z) #\-)) "ab-" :junk-allowed t)))
   (is (equal nil (parse '(times (character-ranges (#\a #\z) #\-)) "AB-" :junk-allowed t)))
   (is (equal nil (parse '(times (character-ranges (#\a #\z) #\-)) "ZY-" :junk-allowed t)))
-  (is (equal '(#\a #\b #\-) (parse '(times character-range) "ab-cd" :junk-allowed t))))
+  (is (equal '(#\a #\b #\-) (parse '(times (v character-range)) "ab-cd" :junk-allowed t))))
 
 
 (test examples-from-readme-test
   (is (equal '("foo" 3)
-             (multiple-value-list (parse '(|| "foo" "bar") "foo"))))
+             (multiple-value-list (parse '(|| (v "foo") (v "bar")) "foo"))))
   (is (equal '(("foo" "foo" "foo") 9)
              (multiple-value-list (parse 'foo+ "foofoofoo"))))
-  (is (eql 123 (parse '(pred #'oddp decimal) "123")))
+  (is (eql 123 (parse '(pred #'oddp (v decimal)) "123")))
   (is (equal '(nil 0)
-             (multiple-value-list (parse '(pred #'evenp decimal) "123" :junk-allowed t)))))
+             (multiple-value-list (parse '(pred #'evenp (v decimal)) "123" :junk-allowed t)))))
 
 
 
@@ -172,21 +172,21 @@
 
 (test cond
   (is (equal "foo" (parse 'cond-word "aaaafoo")))
-  (is (equal "foo" (let ((context t)) (parse '(progn context-sensitive word) "foo"))))
-  (is (equal :error-occured (handler-case (parse '(progn context-sensitive word) "foo")
+  (is (equal "foo" (let ((context t)) (parse '(progn (v context-sensitive) (v word)) "foo"))))
+  (is (equal :error-occured (handler-case (parse '(progn (v context-sensitive) (v word)) "foo")
                               (error () :error-occured))))
-  (is (equal "out of context word" (parse '(|| (progn context-sensitive word)
-                                            ooc-word)
+  (is (equal "out of context word" (parse '(|| (progn (v context-sensitive) (v word))
+                                            (v ooc-word))
          				  "foo"))))
 
 (test followed-by-not-gen
-  (is (equal '("a" nil "b") (parse '(list "a" (-> "b") "b") "ab"))))
+  (is (equal '("a" nil "b") (parse '(list (v "a") (-> (v "b")) (v "b")) "ab"))))
 
 (test preceded-by-not-gen
-  (is (equal '("a" nil "b") (parse '(list "a" (<- "a") "b") "ab")))
-  (is (equal '("a" "b") (parse '(list "a" (|| (<- "b") "b")) "ab")))
-  (is (equal '(#\newline (esrap-liquid::eof)) (parse '(list #\newline
-						       (times (progn (<- #\newline) esrap-liquid::eof)))
+  (is (equal '("a" nil "b") (parse '(list (v "a") (<- (v "a")) (v "b")) "ab")))
+  (is (equal '("a" "b") (parse '(list (v "a") (|| (<- (v "b")) (v "b"))) "ab")))
+  (is (equal '(#\newline (esrap-liquid::eof)) (parse '(list (v #\newline)
+						       (times (progn (<- (v #\newline)) (v esrap-liquid::eof))))
 						     #?"\n"))))
 
 
@@ -213,11 +213,11 @@
 
 (test optional-rule-args
   (is (equal '("f" "f" "f") (parse 'f-opt-times "fff")))
-  (is (equal '("f" "f" "f" "f") (parse '(descend-with-rule 'f-opt-times 4) "ffff")))
+  (is (equal '("f" "f" "f" "f") (parse '(v f-opt-times 4) "ffff")))
   (signals-esrap-error ("ffff" 3 ("Didnt make it to the end of the text"))
                        (parse 'f-opt-times "ffff"))
   (signals-esrap-error ("fff" 3 ("Greedy repetition failed"))
-                       (parse '(descend-with-rule 'f-opt-times 4) "fff")))
+                       (parse '(v f-opt-times 4) "fff")))
   
 (test recursive-capturing
   (is (equal '(#\1 #\2 #\3 #\4 #\5 nil) (parse 'recurcapturing "(1(2(3(4(5(a))))))"))))
@@ -245,11 +245,11 @@
 				       (collect c))))))))
 
 (test start-of-file
-  (is (equal "a" (parse '(progn esrap-liquid::sof "a") "a"))))
+  (is (equal "a" (parse '(progn (v esrap-liquid::sof) (v "a")) "a"))))
 
 (test most-full-parse
-  (is (equal "aaaaa" (parse '(text (most-full-parse (times #\a :exactly 3)
-				    (times #\a :exactly 5)))
+  (is (equal "aaaaa" (parse '(text (most-full-parse (times (v #\a) :exactly 3)
+				    (times (v #\a) :exactly 5)))
 			    "aaaaa"))))
 
 ;;; esrap-env
