@@ -78,7 +78,7 @@
     (parse 'list-of-integers "1, ")))
 
 (test non-consuming-negation
-  (is (equal "foo" (parse '(text (list (! (v "bar")) (v "foo"))) "foo"))))
+  (is (equal "foo" (parse '(text (list (! "bar") (v "foo"))) "foo"))))
 
 (test condition.2
   "Test signaling of `left-recursion' condition."
@@ -99,12 +99,12 @@
 (test negation
   "Test negation in rules."
   (let* ((text "FooBazBar")
-         (t1c (text (parse '(postimes (!! (v "Baz"))) text :junk-allowed t)))
-         (t1e (text (parse '(pred #'identity (postimes (!! (v "Baz")))) text :junk-allowed t)))
-         (t2c (text (parse '(postimes (!! (v "Bar"))) text :junk-allowed t)))
-         (t2e (text (parse '(pred #'identity (postimes (!! (v "Bar")))) text :junk-allowed t)))
-         (t3c (text (parse '(postimes (!! (|| (v "Bar") (v "Baz")))) text :junk-allowed t)))
-         (t3e (text (parse '(pred #'identity (postimes (!! (|| (v "Bar") (v "Baz"))))) text :junk-allowed t))))
+         (t1c (text (parse '(postimes (!! "Baz")) text :junk-allowed t)))
+         (t1e (text (parse '(pred #'identity (postimes (!! "Baz"))) text :junk-allowed t)))
+         (t2c (text (parse '(postimes (!! "Bar")) text :junk-allowed t)))
+         (t2e (text (parse '(pred #'identity (postimes (!! "Bar"))) text :junk-allowed t)))
+         (t3c (text (parse '(postimes (!! (|| "Bar" "Baz"))) text :junk-allowed t)))
+         (t3e (text (parse '(pred #'identity (postimes (!! (|| "Bar" "Baz")))) text :junk-allowed t))))
     (is (equal "Foo" t1c))
     (is (equal "Foo" t1e))
     (is (equal "FooBaz" t2c))
@@ -140,17 +140,17 @@
   (is (equal '(#\a #\b #\-) (parse '(times (character-ranges (#\a #\z) #\-)) "ab-" :junk-allowed t)))
   (is (equal nil (parse '(times (character-ranges (#\a #\z) #\-)) "AB-" :junk-allowed t)))
   (is (equal nil (parse '(times (character-ranges (#\a #\z) #\-)) "ZY-" :junk-allowed t)))
-  (is (equal '(#\a #\b #\-) (parse '(times (v character-range)) "ab-cd" :junk-allowed t))))
+  (is (equal '(#\a #\b #\-) (parse '(times character-range) "ab-cd" :junk-allowed t))))
 
 
 (test examples-from-readme-test
   (is (equal '("foo" 3)
-             (multiple-value-list (parse '(|| (v "foo") (v "bar")) "foo"))))
+             (multiple-value-list (parse '(|| "foo" "bar") "foo"))))
   (is (equal '(("foo" "foo" "foo") 9)
              (multiple-value-list (parse 'foo+ "foofoofoo"))))
-  (is (eql 123 (parse '(pred #'oddp (v decimal)) "123")))
+  (is (eql 123 (parse '(pred #'oddp decimal) "123")))
   (is (equal '(nil 0)
-             (multiple-value-list (parse '(pred #'evenp (v decimal)) "123" :junk-allowed t)))))
+             (multiple-value-list (parse '(pred #'evenp decimal) "123" :junk-allowed t)))))
 
 
 
@@ -177,17 +177,17 @@
   (is (equal :error-occured (handler-case (parse '(progn (v context-sensitive) (v word)) "foo")
                               (error () :error-occured))))
   (is (equal "out of context word" (parse '(|| (progn (v context-sensitive) (v word))
-                                            (v ooc-word))
+                                            ooc-word)
          				  "foo"))))
 
 (test followed-by-not-gen
-  (is (equal '("a" nil "b") (parse '(list (v "a") (-> (v "b")) (v "b")) "ab"))))
+  (is (equal '("a" nil "b") (parse '(list (v "a") (-> "b") (v "b")) "ab"))))
 
 (test preceded-by-not-gen
-  (is (equal '("a" nil "b") (parse '(list (v "a") (<- (v "a")) (v "b")) "ab")))
-  (is (equal '("a" "b") (parse '(list (v "a") (|| (<- (v "b")) (v "b"))) "ab")))
+  (is (equal '("a" nil "b") (parse '(list (v "a") (<- "a") (v "b")) "ab")))
+  (is (equal '("a" "b") (parse '(list (v "a") (|| (<- "b") (v "b"))) "ab")))
   (is (equal '(#\newline (esrap-liquid::eof)) (parse '(list (v #\newline)
-						       (times (progn (<- (v #\newline)) (v esrap-liquid::eof))))
+						       (times (progn (<- #\newline) (v esrap-liquid::eof))))
 						     #?"\n"))))
 
 
@@ -204,7 +204,8 @@
 
 (test variable-capturing
   (is (equal '("foo") (parse 'dressed-elegantly "barbarbarfoobarbarbar")))
-  (is (equal '("foo" "foo") (parse 'dressed-elegantly "barbarbarfoofoobarbarbar")))
+  (is (equal '("foo" "foo") (parse 'dressed-elegantly "barbarbarfoofoobarbarbar"))))
+  
   (is (equal '("foo") (parse 'dressed-elegantly-2 "barbarbarfoobarbarbar")))
   (is (equal '("foo" "foo") (parse 'dressed-elegantly-2 "barbarbarfoofoobarbarbar")))
   (is (equal '("foo") (parse 'dressed-elegantly-2 "barbarfoobarbar")))
@@ -249,8 +250,8 @@
   (is (equal "a" (parse '(progn (v esrap-liquid::sof) (v "a")) "a"))))
 
 (test most-full-parse
-  (is (equal "aaaaa" (parse '(text (most-full-parse (times (v #\a) :exactly 3)
-				    (times (v #\a) :exactly 5)))
+  (is (equal "aaaaa" (parse '(text (most-full-parse (times #\a :exactly 3)
+				    (times #\a :exactly 5)))
 			    "aaaaa"))))
 
 ;;; esrap-env

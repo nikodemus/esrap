@@ -238,8 +238,8 @@
 		map))))
 
 (defrule dressed-elegantly ()
-  (v "bar") (v "bar") (v "bar") (cap a (v foo+)) (v "bar") (v "bar") (v "bar")
-  (recap 1))
+  (v "bar") (v "bar") (v "bar") (cap a foo+) (v "bar") (v "bar") (v "bar")
+  (recap a))
 
 (defrule dressed-elegantly-2 ()
   (|| (progn (v "bar") (v "bar") (v "bar") (cap a foo+) (v "bar") (v "bar") (v "bar"))

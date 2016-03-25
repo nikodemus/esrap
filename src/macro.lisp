@@ -22,6 +22,30 @@
 	  (the-length 0))
      ,@body))
 
+(defparameter *cap-stash* nil
+  "Assoc list used to capture temporary variables")
+
+(defmacro with-fresh-cap-stash (&body body)
+  `(let* ((up-cap-stash *cap-stash*)
+	  (*cap-stash* nil))
+     (declare (ignorable up-cap-stash))
+     ,@body))
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defun propagate-cap-stash-upwards (up-var down-var body)
+    (with-gensyms (g!-vals g!-it)
+      `(let ((,g!-vals (multiple-value-list (progn ,@body))))
+	 (iter (for (key . val) in ,down-var)
+	       (let ((,g!-it (assoc key ,up-var)))
+		 (if ,g!-it
+		     (setf (cdr ,g!-it) val)
+		     (push (cons key val) ,up-var))))
+	 (values-list ,g!-vals)))))
+
+(defmacro with-sub-cap-stash (&body body)
+  `(with-fresh-cap-stash
+     ,(propagate-cap-stash-upwards 'up-cap-stash '*cap-stash* body)))
+
 (defun wrap-with-esrap-macrolets (body)
   `(macrolet ((v (thing &rest args)
 		(cond ((characterp thing) (if args
@@ -33,9 +57,29 @@
                                                                but it shouldn't")
 					   `(descend-with-rule 'string ,thing)))
 		      ((symbolp thing) `(descend-with-rule ',thing ,@args))
-		      (t (error "Don't know how to descend with this : ~a" thing)))))
+		      (t (error "Don't know how to descend with this : ~a" thing))))
+	      (cap (key val)
+		(let ((key (intern (string key) "KEYWORD")))
+		  (with-gensyms (g!-it)
+		    `(let ((,g!-it (assoc ,key *cap-stash*)))
+		       (if ,g!-it
+			   (setf (cdr ,g!-it) ,(maybe-wrap-in-descent val))
+			   (push (cons ,key ,(maybe-wrap-in-descent val)) *cap-stash*))))))
+	      (recap (key)
+		(let ((key (intern (string key) "KEYWORD")))
+		  (with-gensyms (g!-it)
+		    `(let ((,g!-it (assoc ,key *cap-stash*)))
+		       (if ,g!-it
+			   (cdr ,g!-it)
+			   (fail-parse-format "Key ~a is not captured (unbound)." ,key)))))))
      ,body))
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defun maybe-wrap-in-descent (thing)
+    (cond ((characterp thing) `(descend-with-rule 'character ,thing))
+	  ((stringp thing) `(descend-with-rule 'string ,thing))
+	  ((symbolp thing) `(descend-with-rule ',thing))
+	  (t thing))))
 
 (defun make-rule-lambda (name args body)
   (multiple-value-bind (reqs opts rest kwds allow-other-keys auxs kwds-p) (parse-ordinary-lambda-list args)
@@ -48,14 +92,15 @@
        `(named-lambda ,(intern #?"ESRAP-$((string name))") (,@args)
 	  ,@(if doc `(,doc))
 	  ,@decls
-	  (with-cached-result (,name ,@reqs
-				     ,@(if rest
-					   `(,rest)
-					   (iter (for (opt-name opt-default opt-supplied-p) in opts)
-						 (collect opt-name)
-						 (if opt-supplied-p
-						     (collect opt-supplied-p)))))
-	    ,@body))))))
+	  (with-fresh-cap-stash
+	    (with-cached-result (,name ,@reqs
+				       ,@(if rest
+					     `(,rest)
+					     (iter (for (opt-name opt-default opt-supplied-p) in opts)
+						   (collect opt-name)
+						   (if opt-supplied-p
+						       (collect opt-supplied-p)))))
+	      ,@body)))))))
 
 
 
@@ -99,7 +144,7 @@
 			      (print-iter-state)
 			      (with-saved-iter-state (the-iter)
 				(handler-case (return-from ,g!-ordered-choice
-						(let ((res ,clause))
+						(let ((res (with-sub-cap-stash ,(maybe-wrap-in-descent clause))))
 						  ;; (if-debug "|| pre-succeeding")
 						  (values res the-length)))
 				  (simple-esrap-error (e)
@@ -127,16 +172,18 @@
 			   `(the-position-boundary
 			      (print-iter-state)
 			      (with-saved-iter-state (the-iter)
-				(handler-case ,clause
-				  (simple-esrap-error (e)
-				    (restore-iter-state)
-				    (push e ,g!-parse-errors))
-				  (:no-error (res)
-				    (restore-iter-state)
-				    (push (list res the-length) ,g!-successful-parses))))))
+				(with-fresh-cap-stash
+				  (handler-case ,(maybe-wrap-in-descent clause)
+				    (simple-esrap-error (e)
+				      (restore-iter-state)
+				      (push e ,g!-parse-errors))
+				    (:no-error (res)
+				      (restore-iter-state)
+				      (push (list res the-length *cap-stash*) ,g!-successful-parses)))))))
 			 clauses)
 	       (if ,g!-successful-parses
-		   (destructuring-bind (res length) (car (sort ,g!-successful-parses #'> :key #'cadr))
+		   (destructuring-bind (res length stash) (car (sort ,g!-successful-parses #'> :key #'cadr))
+		     ,(propagate-cap-stash-upwards '*cap-stash* 'stash nil)
 		     (fast-forward the-iter length)
 		     (values res length))
 		   (progn (if-debug "|| before failing P ~a L ~a" the-position the-length)
@@ -155,7 +202,7 @@
      (if-debug "! P ~a L ~a" the-position the-length)
      (the-position-boundary
        (with-saved-iter-state (the-iter)
-	 (handler-case ,expr
+	 (handler-case (with-fresh-cap-stash ,(maybe-wrap-in-descent expr))
 	   (simple-esrap-error ()
 	     (restore-iter-state)
 	     nil)
@@ -171,7 +218,7 @@
      (if-debug "!!")
      (the-position-boundary
        (with-saved-iter-state (the-iter)
-	 (handler-case ,expr
+	 (handler-case (with-fresh-cap-stash ,(maybe-wrap-in-descent expr))
 	   (simple-esrap-error ()
 	     (restore-iter-state)
 	     nil)
@@ -194,7 +241,7 @@
 			    (with-saved-iter-state (the-iter)
 			      ;; (format t "   Inside subexpression:~%")
 			      (handler-case (the-position-boundary
-					      (let ((subexpr ,subexpr))
+					      (let ((subexpr (with-sub-cap-stash ,(maybe-wrap-in-descent subexpr))))
 						;; (format t "    succeeding ~s ~a~%" subexpr the-length)
 						;; (print-iter-state the-iter)
 						(values subexpr the-length)))
@@ -227,14 +274,15 @@
   (with-gensyms (g!-it)
     `(tracing-level
        (if-debug "PREDICATE")
-       (let ((,g!-it ,subexpr))
-	 (if (funcall ,predicate ,g!-it)
-	     ,g!-it
-	     (fail-parse "Predicate test failed"))))))
+       (with-sub-cap-stash
+	 (let ((,g!-it ,(maybe-wrap-in-descent subexpr)))
+	   (if (funcall ,predicate ,g!-it)
+	       ,g!-it
+	       (fail-parse "Predicate test failed")))))))
 
 (defmacro progm (start meat end)
   "Prog Middle."
-  `(progn ,start (prog1 ,meat ,end)))
+  `(progn ,(maybe-wrap-in-descent start) (prog1 ,(maybe-wrap-in-descent meat) ,(maybe-wrap-in-descent end))))
 
 (defmacro ? (subexpr)
   (with-gensyms (g!-? g!-result g!-the-length)
@@ -245,7 +293,7 @@
 	     (the-position-boundary
 	       (print-iter-state)
 	       (with-saved-iter-state (the-iter)
-		 (handler-case ,subexpr
+		 (handler-case (with-sub-cap-stash ,(maybe-wrap-in-descent subexpr))
 		   (simple-esrap-error ()
 		     (restore-iter-state)
 		     (values nil nil))
@@ -259,36 +307,37 @@
      (if-debug "&")
      (make-result (the-position-boundary
 		    (with-saved-iter-state (the-iter)
-		      (let ((it ,subexpr))
+		      (let ((it (with-sub-cap-stash ,(maybe-wrap-in-descent subexpr))))
 			(restore-iter-state)
 			it))))))
 			
 
 (defmacro -> (subexpr)
-  (tracing-level
-    (if-debug "->")
-    (if (and (symbolp subexpr) (equal (string subexpr) "EOF"))
-	`(progn (descend-with-rule 'eof) nil)
-	`(progn (the-position-boundary
-		  (with-saved-iter-state (the-iter)
-		    ,subexpr
-		    (restore-iter-state)))
-		(make-result nil)))))
+  `(tracing-level
+     (if-debug "->")
+     ,(if (and (symbolp subexpr) (equal (string subexpr) "EOF"))
+	  `(progn (descend-with-rule 'eof) nil)
+	  `(progn (the-position-boundary
+		    (with-saved-iter-state (the-iter)
+		      (with-sub-cap-stash ,(maybe-wrap-in-descent subexpr))
+		      (restore-iter-state)))
+		  (make-result nil)))))
 
 (defmacro <- (subexpr)
   `(tracing-level
      (if-debug "<-")
      ,(if (and (symbolp subexpr) (equal (string subexpr) "SOF"))
 	  `(progn (descend-with-rule 'sof) nil)
-	  `(progn (the-position-boundary
-		    (handler-case (progn (rel-rewind the-iter)
-					 (decf the-position))
-		      (buffer-error ()
-			(fail-parse "Can't rewind back even by 1 token")))
-		    ,subexpr
-		    (if (not (equal the-length 1))
-			(fail-parse "Parsing of subexpr took more than 1 token.")))
-		  nil))))
+	  `(with-sub-cap-stash
+	     (the-position-boundary
+	       (handler-case (progn (rel-rewind the-iter)
+				    (decf the-position))
+		 (buffer-error ()
+		   (fail-parse "Can't rewind back even by 1 token")))
+	       ,(maybe-wrap-in-descent subexpr)
+	       (if (not (equal the-length 1))
+		   (fail-parse "Parsing of subexpr took more than 1 token.")))
+	     nil))))
 	     
 
 (defmacro cond-parse (&rest clauses)

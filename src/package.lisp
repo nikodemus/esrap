@@ -18,5 +18,5 @@
    #:defrule #:descend-with-rule #:any-string #:character #:string #:||
    #:parse #:text #:fail-parse #:fail-parse-format
    #:define-esrap-env #:in-esrap-env
-   #:v #:cap
+   #:v #:cap #:recap
    ))
