@@ -15,16 +15,6 @@
 	 (tracing-level
 	   (funcall ,g!-it ,@args)))))
 
-(defmacro with-esrap-reader-context (&body body)
-  `(let ((char-reader (get-dispatch-macro-character #\# #\\))
-          (string-reader (get-macro-character #\")))
-      (with-dispatch-macro-character (#\# #\\ (esrap-char-reader char-reader))
-        (with-macro-character (#\" (esrap-string-reader string-reader))
-          (read-macrolet ((literal-char (esrap-literal-char-reader char-reader))
-                          (literal-string (esrap-literal-string-reader string-reader))
-                          (character-ranges (esrap-character-ranges char-reader)))
-            ,@body)))))
-
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defmacro-enhance::def-*!-symbol-p c)
   (defun parse-c!-symbol (sym)
@@ -36,27 +26,25 @@
 		  (subseq third 1))))))
       
 
-(defmacro with-esrap-variable-transformer (&body body)
-  `(let ((*variable-transformer* (lambda (sym)
-				   (declare (special c!-vars))
-				   (if (c!-symbol-p sym)
-				       (multiple-value-bind (var-name rule-name) (parse-c!-symbol sym)
-					 ;; (format t "Var-name is : ~a, rule-name is : ~a~%" var-name rule-name)
-					 (if rule-name
-					     (progn (setf (gethash var-name c!-vars) t)
-						    `(setq ,var-name
-							   (descend-with-rule ',(intern rule-name))))
-					     (fail-transform)))
-				       ;; KLUDGE to not parse lambda-lists in defrule args
-				       (if (equal "CHARACTER" (string sym))
-					   `(descend-with-rule 'character nil)
-					   `(descend-with-rule ',sym))))))
-	 ,@body))
-
 (defmacro the-position-boundary (&body body)
   `(let* ((the-position (+ the-position the-length))
 	  (the-length 0))
      ,@body))
+
+(defun wrap-with-esrap-macrolets (body)
+  `(macrolet ((v (thing &rest args)
+		(cond ((characterp thing) (if args
+					      (error "Descent with character has extra argument, &
+                                                                  but it shouldn't")
+					      `(descend-with-rule 'character ,thing)))
+		      ((stringp thing) (if args
+					   (error "Descent with string has extra argument, &
+                                                               but it shouldn't")
+					   `(descend-with-rule 'string ,thing)))
+		      ((symbolp thing) `(descend-with-rule ',thing ,@args))
+		      (t (error "Don't know how to descend with this : ~a" thing)))))
+     ,body))
+
 
 (defun! make-rule-lambda (name args body)
   (multiple-value-bind (reqs opts rest kwds allow-other-keys auxs kwds-p) (parse-ordinary-lambda-list args)
@@ -64,38 +52,30 @@
     (if kwds-p (error "&KEY arguments are not supported"))
     (if allow-other-keys (error "&ALLOW-OTHER-KEYS is not supported"))
     (if auxs (error "&AUX variables are not supported, use LET"))
-    `(named-lambda ,(intern (strcat "ESRAP-" name)) (,@args)
-       (with-cached-result (,name ,@reqs
-				  ,@(if rest
-					`(,rest)
-					(iter (for (opt-name opt-default opt-supplied-p) in opts)
-					      (collect opt-name)
-					      (if opt-supplied-p
-						  (collect opt-supplied-p)))))
-	 ,@body))))
+    (wrap-with-esrap-macrolets
+     `(named-lambda ,(intern (strcat "ESRAP-" name)) (,@args)
+	(with-cached-result (,name ,@reqs
+				   ,@(if rest
+					 `(,rest)
+					 (iter (for (opt-name opt-default opt-supplied-p) in opts)
+					       (collect opt-name)
+					       (if opt-supplied-p
+						   (collect opt-supplied-p)))))
+	  ,@body)))))
 
 
-(defmacro!! %defrule (name args &body body &environment env)
-    (with-esrap-reader-context
-      (call-next-method))
-  (with-esrap-variable-transformer
-    (let ((c!-vars (make-hash-table)))
-      (declare (special c!-vars))
-      (if-debug-fun "I'm starting to actually expand ~a!" name)
-      ;; TODO: bug - C!-vars values are kept between different execution of a rule!
-      (let ((pre-body (macroexpand-cc-all-transforming-undefs
-		       (make-rule-lambda name args body)
-		       :env env)))
-	`(setf (gethash ',name *rules*)
-	       ,(crunch-c!-s pre-body))))))
 
-(defmacro!! defrule (name args &body body)
-    ()
+(defmacro %defrule (name args &body body)
+  (if-debug-fun "I'm starting to actually expand ~a!" name)
+  ;; TODO: bug - C!-vars values are kept between different execution of a rule!
+  `(setf (gethash ',name *rules*)
+	 ,(make-rule-lambda name args body)))
+
+(defmacro defrule (name args &body body)
   `(progn (%defrule ,name ,args ,@body)
 	  (setf (gethash ',name *rule-context-sensitivity*) t)))
 
-(defmacro!! def-nocontext-rule (name args &body body)
-    ()
+(defmacro def-nocontext-rule (name args &body body)
   `(progn (%defrule ,name ,args ,@body)
 	  (setf (gethash ',name *rule-context-sensitivity*) nil)))
 
@@ -315,7 +295,6 @@
   `(|| ,@(mapcar (lambda (clause)
                    `(progn ,@clause))
                  clauses)))
-
 
 
 (defun crunch-c!-s (pre-body)

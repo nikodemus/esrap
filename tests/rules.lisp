@@ -7,7 +7,6 @@
 
 (in-package :esrap-liquid-tests)
 
-(enable-read-macro-tokens)
 (cl-interpol:enable-interpol-syntax)
 
 ;;;; A few semantic predicates
@@ -28,62 +27,60 @@
 ;;;; Utility rules
 
 (defrule whitespace-char ()
-  (|| #\space #\tab #\newline))
+  (|| (v #\space) (v #\tab) (v #\newline)))
 
 (defrule whitespace ()
-  (text (postimes whitespace-char)))
+  (text (postimes (v whitespace-char))))
 
 (defrule maybe-whitespace ()
-  (text (? whitespace)))
+  (text (? (v whitespace))))
 
 (defrule maybe-whitespace-char ()
-  (text (? whitespace-char)))
+  (text (? (v whitespace-char))))
 
 (defrule empty-line ()
-  (progn #\newline (literal-string "")))
+  (progn (v #\newline) ""))
 
 (defrule nonewline-line ()
-  (postimes (pred #'not-newline character)))
+  (postimes (pred #'not-newline (v character))))
 
 (defrule a-char-line ()
-  (postimes #\a))
+  (postimes (v #\a)))
 
 (defrule maybe-newline ()
-  (? #\newline))
+  (? (v #\newline)))
 
 (defrule non-empty-line ()
-  (text (prog1 (postimes (pred #'not-newline character))
-          (? #\newline))))
+  (text (prog1 (postimes (pred #'not-newline (v character)))
+          (? (v #\newline)))))
 
 (defrule space ()
-  #\space)
+  (v #\space))
 
 (defrule line ()
-  (|| empty-line non-empty-line))
+  (|| (v empty-line) (v non-empty-line)))
 
 (defrule trimmed-line ()
-  (string-trim '((literal-char #\space)
-                 (literal-char #\tab))
-               line))
+  (string-trim '(#\space #\tab) (v line)))
 
 (defrule trimmed-lines ()
-  (times trimmed-line))
+  (times (v trimmed-line)))
 
 (defrule digits ()
-  (text (postimes (pred #'digit-char-p character))))
+  (text (postimes (pred #'digit-char-p (v character)))))
 
 (defrule integer ()
-  (parse-integer (progm (? whitespace)
-                        digits
-                        (list (? whitespace) (|| (& #\,) (! character))))))
+  (parse-integer (progm (? (v whitespace))
+                        (v digits)
+                        (list (? (v whitespace)) (|| (& (v #\,)) (! (v character)))))))
 
 (defrule list-of-integers ()
-  (let ((it (|| (list integer
-		      #\,
+  (let ((it (|| (list (v integer)
+		      (v #\,)
 		      (progn ;; (format t (literal-string "I'm here!~%"))
 			     (esrap-liquid::print-iter-state)
-			     list-of-integers))
-                integer)))
+			     (v list-of-integers)))
+                (v integer))))
     (if (integerp it)
         (list it)
         (destructuring-bind (int comma list) it
@@ -91,58 +88,58 @@
           (cons int list)))))
 
 (defrule single-token/bounds.1 ()
-  (format nil (literal-string "~A[~S-~S]")
-          (text (postimes (pred #'not-space character)))
+  (format nil "~A[~S-~S]"
+          (text (postimes (pred #'not-space (v character))))
           match-start
           match-end))
 
 (defrule single-token/bounds.2 ()
-  (format nil (literal-string "~C~A(~S-~S)")
-          (pred #'not-space character)
-          (text (times (pred #'not-space character)))
+  (format nil "~C~A(~S-~S)"
+          (pred #'not-space (v character))
+          (text (times (pred #'not-space (v character))))
           match-start
           match-end))
 
 (defrule tokens/bounds.1 ()
-  (let ((match (progn (? whitespace)
-                      (|| (cons single-token/bounds.1
-                                (progn whitespace tokens/bounds.1))
-                          single-token/bounds.1))))
+  (let ((match (progn (? (v whitespace))
+                      (|| (cons (v single-token/bounds.1)
+                                (progn (v whitespace) (v tokens/bounds.1)))
+                          (v single-token/bounds.1)))))
     (if (stringp match)
         (list match)
         match)))
 
 (defrule tokens/bounds.2 ()
-  (let ((match (progn (? whitespace)
-                      (|| (cons single-token/bounds.2
-                                (progn whitespace tokens/bounds.2))
-                          single-token/bounds.2))))
+  (let ((match (progn (? (v whitespace))
+                      (|| (cons (v single-token/bounds.2)
+                                (progn (v whitespace) (v tokens/bounds.2)))
+                          (v single-token/bounds.2)))))
     (if (stringp match)
         (list match)
         match)))
 
 (defrule left-recursion ()
-  (progn left-recursion "l"))
+  (progn (v left-recursion) (v "l")))
 
 (declaim (special *depth*))
 (defvar *depth* nil)
 
 (defrule around/inner ()
-  (text (postimes (pred #'alpha-char-p character))))
+  (text (postimes (pred #'alpha-char-p (v character)))))
 
 (defrule around.1 ()
   (let ((*depth* (if *depth*
                      (cons (1+ (first *depth*)) *depth*)
                      (list 0))))
-    (let ((it (|| around/inner
-                  (list #\{ around.1 #\}))))
+    (let ((it (|| (v around/inner)
+                  (list (v #\{) (v around.1) (v #\})))))
       (if (stringp it)
           (cons *depth* it)
           (second it)))))
 
 (defrule around.2 ()
-  (let ((it (|| around/inner
-                (progm #\{ around.2 #\}))))
+  (let ((it (|| (v around/inner)
+                (progm (v #\{) (v around.2) (v #\})))))
     (if (stringp it)
         `(((0 . (,match-start . ,match-end))) . ,it)
         `(((,(1+ (caaar it)) . (,match-start . ,match-end)) ,. (car it)) . ,(cdr it)))))
@@ -153,18 +150,18 @@
 ;; ;; Testing ambiguity when repetitioning possibly empty-string-match
 
 (defrule spaces ()
-  (length (times #\space)))
+  (length (times (v #\space))))
 
 (defrule three-spaces ()
-  (length (times #\space :exactly 3)))
+  (length (times (v #\space) :exactly 3)))
 
 (defrule upto-three-spaces ()
-  (length (times #\space :upto 3)))
+  (length (times (v #\space) :upto 3)))
 
 (defrule greedy-pos-spaces ()
-  (postimes spaces))
+  (postimes (v spaces)))
 (defrule greedy-spaces ()
-  (times spaces))
+  (times (v spaces)))
 
 ;; Subtle bug here was caused by the fact, that SEPARATOR variable name
 ;; was the same as SEPARATOR rule-name.
@@ -177,28 +174,28 @@
   (and (characterp x) (char= x separator-char)))
 
 (defrule separator ()
-  (pred #'separator-p character))
+  (pred #'separator-p (v character)))
 
 (defrule not-separator ()
-  (!! separator))
+  (!! (v separator)))
 
 (defrule word ()
-  (text (postimes (!! separator))))
+  (text (postimes (!! (v separator)))))
 
 (defrule simple-wrapped ()
-  (let ((separator-char simple-prefix))
-    (prog1 (cons word
-                 (times (progn separator word)))
-      (? separator))))
+  (let ((separator-char (v simple-prefix)))
+    (prog1 (cons (v word)
+                 (times (progn (v separator) (v word))))
+      (? (v separator)))))
 
 (defparameter dyna-from-times 3)
 (defparameter dyna-to-times 5)
 
 (defrule dyna-from-to ()
-  (text (times "a" :from dyna-from-times :upto dyna-to-times)))
+  (text (times (v "a") :from dyna-from-times :upto dyna-to-times)))
 
 (defrule dyna-from-tos ()
-  (times dyna-from-to))
+  (times (v dyna-from-to)))
 
 (defparameter context :void)
 
@@ -207,32 +204,33 @@
   (and context (not (eql context :void))))
 
 (defrule context-sensitive ()
-  (pred #'in-context-p ""))
+  (pred #'in-context-p (v "")))
 (defrule ooc-word ()
-  word
-  (literal-string "out of context word"))
+  (v word)
+  "out of context word")
 
 (defrule cond-word ()
-  dyna-from-to
-  word)
+  (v dyna-from-to)
+  (v word))
 
 (defrule foo+ ()
-  (postimes "foo"))
+  (postimes (v "foo")))
 
 (defrule bar+ ()
-  (postimes "bar"))
+  (postimes (v "bar")))
 
 (defrule decimal ()
-  (parse-integer (format nil (literal-string "~{~A~}")
-                         (postimes (|| "0" "1" "2" "3" "4" "5" "6" "7" "8" "9")))))
+  (parse-integer (format nil "~{~A~}"
+                         (postimes (|| (v "0") (v "1") (v "2") (v "3") (v "4")
+				       (v "5") (v "6") (v "7") (v "8") (v "9"))))))
 
 ;;; Here we test correctness of defininion of parsing environments
 
 (define-foo-rule abracadabra ()
-  (literal-string "foo"))
+  "foo")
 
 (define-bar-rule abracadabra ()
-  (literal-string "bar"))
+  "bar")
 
 (let ((map '((#\a . :a) (#\b . :b) (#\c . :c))))
   (defrule closure-rule ()
@@ -240,35 +238,35 @@
 		map))))
 
 (defrule dressed-elegantly ()
-  "bar" "bar" "bar" c!-1-foo+ "bar" "bar" "bar"
-  c!-1)
+  (v "bar") (v "bar") (v "bar") (cap a (v foo+)) (v "bar") (v "bar") (v "bar")
+  (recap 1))
 
 (defrule dressed-elegantly-2 ()
-  (|| (progn "bar" "bar" "bar" c!-1-foo+ "bar" "bar" "bar")
-      (progn "bar" "bar" c!-1-foo+ "bar" "bar"))
-  c!-1)
+  (|| (progn (v "bar") (v "bar") (v "bar") (cap a foo+) (v "bar") (v "bar") (v "bar"))
+      (progn (v "bar") (v "bar") (cap a foo+) (v "bar") (v "bar")))
+  (recap a))
 
 (defrule cap-overwrite ()
-  c!-1-bar+ c!-2-foo+ c!-2-bar+
-  (list c!-1 c!-2))
+  (cap a bar+) (cap b foo+) (cap b bar+)
+  (list (recap a) (recap b)))
 
 (defrule f-opt-times (&optional (n 3))
-  (times "f" :exactly n))
+  (times (v "f") :exactly n))
 
 
 (defrule cipher ()
   (character-ranges (#\0 #\9)))
 
 (defrule recurcapturing ()
-  #\( (|| (progn c!-int-cipher c!-rc-recurcapturing)
-	  #\a)
-  #\)
-  (cons c!-int c!-rc))
+  (v #\() (|| (progn (cap int cipher) (cap rc recurcapturing))
+	      (v #\a))
+  (v #\))
+  (cons (recap int) (recap rc)))
 
 (defrule triple-a ()
-  (list #\a #\a #\a))
+  (list (v #\a) (v #\a) (v #\a)))
 
 (defrule abc-or-def ()
-  (|| (list #\a #\b #\c)
-      (list #\d #\e #\f)))
+  (|| (list (v #\a) (v #\b) (v #\c))
+      (list (v #\d) (v #\e) (v #\f))))
 

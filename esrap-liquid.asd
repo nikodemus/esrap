@@ -38,7 +38,7 @@
 (defsystem :esrap-liquid-tests
   :description "Tests for ESRAP-LIQUID."
   :licence "GPL"
-  :depends-on (#:esrap-liquid #:fiveam #:cl-interpol)
+  :depends-on (#:esrap-liquid #:fiveam #:cl-interpol #:cl-indeterminism)
   :serial t
   :pathname "tests/"
   :components ((:file "package")

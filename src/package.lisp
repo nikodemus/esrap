@@ -10,7 +10,6 @@
   (:use #:cl #:alexandria #:defmacro-enhance #:iterate #:cl-indeterminism #:cl-read-macro-tokens)
   (:shadowing-import-from #:rutils.string #:strcat)
   (:export
-   #:enable-read-macro-tokens #:disable-read-macro-tokens
    #:! #:? #:& #:~ #:<- #:-> #:!! #:times #:postimes #:pred #:progm #:cond-parse #:character-ranges
    #:most-full-parse
    #:match-start #:match-end
@@ -20,4 +19,5 @@
    #:defrule #:descend-with-rule #:any-string #:character #:string #:||
    #:parse #:text #:fail-parse #:fail-parse-format
    #:define-esrap-env #:in-esrap-env
+   #:v #:cap
    ))

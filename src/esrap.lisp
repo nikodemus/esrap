@@ -8,16 +8,19 @@
 
 ;;; MAIN INTERFACE
 
-(defmacro! with-tmp-rule ((var expression) &body body)
-  `(let ((,var (gensym "TMP-RULE")))
-     (unwind-protect (progn (setf (gethash ,var *rules*)
-				  (funcall (compile nil `(lambda ()
-							   ,(with-esrap-variable-transformer
-							     (macroexpand-all-transforming-undefs
-							      (make-rule-lambda 'esrap-tmp-rule ()
-										(list ,expression))))))))
-			    ,@body)
-       (remhash ,var *rules*))))
+(defmacro with-tmp-rule ((var expression) &body body)
+  (with-gensyms (g!-expr g!-rule)
+    `(let ((,g!-expr ,expression))
+       (unwind-protect (progn (setf (gethash ',g!-rule *rules*)
+				    (funcall (compile nil `(lambda ()
+							     ,(make-rule-lambda
+							       'esrap-tmp-rule ()
+							       (list (if (symbolp ,g!-expr)
+									 `(v ,,g!-expr)
+									 ,g!-expr)))))))
+			      (let ((,var ',g!-rule))
+				,@body))
+	 (remhash ',g!-rule *rules*)))))
 
 
 (defun parse-token-iter (expression token-iter &key junk-allowed)
@@ -47,49 +50,29 @@
 are allowed only if JUNK-ALLOWED is true."
   (parse-token-iter expression (mk-esrap-iter-from-string text start end) :junk-allowed junk-allowed))
 
-;; Read behaviour of PARSE is different from that of usual reader macros,
-;; but we want to DEFMACRO!! also capture it, hence define new reader class
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (defclass parse-reader-class (cl-read-macro-tokens::tautological-read-macro-token) ())
-  (defmethod read-handler ((obj parse-reader-class) stream token)
-    (let ((expression (with-esrap-reader-context
-                        (read stream t nil t))))
-      `(,(slot-value obj 'cl-read-macro-tokens::name) ,expression ,@(read-list-old stream token))))
-  (setf (gethash 'parse-token-iter cl-read-macro-tokens::*read-macro-tokens-classes*)
-	'parse-reader-class
-        (gethash 'parse-token-iter cl-read-macro-tokens::*read-macro-tokens-instances*)
-	(make-instance 'parse-reader-class
-		       :name 'parse-token-iter))
-  (setf (gethash 'parse cl-read-macro-tokens::*read-macro-tokens-classes*)
-	'parse-reader-class
-        (gethash 'parse cl-read-macro-tokens::*read-macro-tokens-instances*)
-	(make-instance 'parse-reader-class
-		       :name 'parse))
-  (setf (gethash 'parse *read-macro-tokens*)
-        (lambda (stream token)
-          (read-handler (gethash 'parse cl-read-macro-tokens::*read-macro-tokens-instances*)
-                        stream token))))
+;; ;; Read behaviour of PARSE is different from that of usual reader macros,
+;; ;; but we want to DEFMACRO!! also capture it, hence define new reader class
+;; (eval-when (:compile-toplevel :load-toplevel :execute)
+;;   (defclass parse-reader-class (cl-read-macro-tokens::tautological-read-macro-token) ())
+;;   (defmethod read-handler ((obj parse-reader-class) stream token)
+;;     (let ((expression (with-esrap-reader-context
+;;                         (read stream t nil t))))
+;;       `(,(slot-value obj 'cl-read-macro-tokens::name) ,expression ,@(read-list-old stream token))))
+;;   (setf (gethash 'parse-token-iter cl-read-macro-tokens::*read-macro-tokens-classes*)
+;; 	'parse-reader-class
+;;         (gethash 'parse-token-iter cl-read-macro-tokens::*read-macro-tokens-instances*)
+;; 	(make-instance 'parse-reader-class
+;; 		       :name 'parse-token-iter))
+;;   (setf (gethash 'parse cl-read-macro-tokens::*read-macro-tokens-classes*)
+;; 	'parse-reader-class
+;;         (gethash 'parse cl-read-macro-tokens::*read-macro-tokens-instances*)
+;; 	(make-instance 'parse-reader-class
+;; 		       :name 'parse))
+;;   (setf (gethash 'parse *read-macro-tokens*)
+;;         (lambda (stream token)
+;;           (read-handler (gethash 'parse cl-read-macro-tokens::*read-macro-tokens-instances*)
+;;                         stream token))))
 
-
-(defun esrap-char-reader (char-reader)
-  (lambda (stream char subchar)
-    `(descend-with-rule 'character ,(funcall char-reader stream char subchar))))
-(defun esrap-string-reader (string-reader)
-  (lambda (stream char)
-    `(descend-with-rule 'string ,(funcall string-reader stream char))))
-(defun esrap-literal-char-reader (char-reader)
-  (lambda (stream token)
-    (with-dispatch-macro-character (#\# #\\ char-reader)
-      (car (read-list-old stream token)))))
-(defun esrap-literal-string-reader (string-reader)
-  (lambda (stream token)
-    (with-macro-character (#\" string-reader)
-      (car (read-list-old stream token)))))
-
-(defun esrap-character-ranges (char-reader)
-  (lambda (stream token)
-    (with-dispatch-macro-character (#\# #\\ char-reader)
-      `(character-ranges ,@(read-list-old stream token)))))
 
 (defmacro! character-ranges (&rest char-specs)
   (macrolet ((fail ()

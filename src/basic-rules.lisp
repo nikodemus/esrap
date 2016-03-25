@@ -6,8 +6,6 @@
 
 (in-package #:esrap-liquid)
 
-(enable-read-macro-tokens)
-
 (def-nocontext-rule eof ()
   (handler-case (next-iter the-iter)
     (stop-iteration () (make-result 'eof))
@@ -42,7 +40,7 @@
 	       1))
   
 
-(def-nocontext-rule character (char)
+(def-nocontext-rule character (&optional char)
   (let ((it (handler-case (next-iter the-iter)
 	      (stop-iteration () (fail-parse "EOF reached while trying to parse character.")))))
     ;; (format t (literal-string "        in character: ~s ~s~%") it char)
