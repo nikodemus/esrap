@@ -44,13 +44,13 @@
   (times (postimes (pred #'alphanumericp character))))
 
 (defrule declaration ()
-  (destructuring-bind (name colon type) (list name #\: type)
+  (destructuring-bind (name colon type) (list (v name) (v #\:) (v type))
     (declare (ignore colon))
     (setf (lookup name) (list name :type type))
     (values)))
 
 (defrule use ()
-  (let ((name name))
+  (let ((name (v name)))
     (list :use (or (lookup name)
                    (error "~@<Undeclared variable: ~S.~@:>"
                           name)))))
@@ -59,14 +59,14 @@
   (remove nil (postimes (|| scope declaration use))))
 
 (defrule statement/ws ()
-  (prog1 statement (? whitespace)))
+  (prog1 (v statement) (? whitespace)))
 
 (defrule scope ()
   (let ((*symbol-table* (make-symbol-table *symbol-table*)))
     (list* :scope (apply #'append 
-                         (progm (progn #\{ (? whitespace))
-                                (* statement/ws)
-                                (progn #\} (? whitespace)))))))
+                         (progm (progn (v #\{) (? whitespace))
+                                (times statement/ws)
+                                (progn (v #\}) (? whitespace)))))))
 
 (parse 'scope "{
   a:int

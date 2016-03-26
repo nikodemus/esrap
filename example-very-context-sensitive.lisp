@@ -25,14 +25,14 @@
   (character-ranges (#\0 #\9)))
 
 (defrule indent-spec-line ()
-  (parse-integer (text (progm (progn spaces "|")
+  (parse-integer (text (progm (progn (v spaces) (v "|"))
                               (postimes digit)
-                              (progn "|" spaces #\newline)))))
+                              (progn (v "|") (v spaces) (v #\newline))))))
 
 (defrule indented-line ()
-  (prog1 (text (make-string indented-spaces :initial-element #\space)
+  (prog1 (text (make-string (v indented-spaces) :initial-element #\space)
                (times (!! #\newline)))
-    #\newline))
+    (v #\newline)))
 
 (defun more-indented-block-p (explicit-block)
   (>= (caddr explicit-block)

@@ -7,8 +7,6 @@
 
 (in-package :sexp-grammar)
 
-(enable-read-macro-tokens)
-
 ;;; A semantic predicate for filtering out double quotes.
 
 (defun not-doublequote (char)
@@ -29,7 +27,7 @@
 
 (defrule string-char ()
   (|| (pred #'not-doublequote character)
-      (list #\\ #\")))
+      (list (v #\\) (v #\"))))
 
 ;;; Here we go: an S-expression is either a list or an atom, with possibly leading whitespace.
 
@@ -40,15 +38,15 @@
 
 (defrule magic ()
   (if (eq * :use-magic)
-      (progn "foobar"
+      (progn (v "foobar")
              :magic)
       (fail-parse "No room for magic in this world")))
 
 (defrule list ()
-  #\(
-  (let ((res `(,sexp ,. (times sexp))))
+  (v #\()
+  (let ((res `(,(v sexp) ,. (times sexp))))
     (? whitespace)
-    #\)
+    (v #\))
     res))
 
 (defrule atom ()
