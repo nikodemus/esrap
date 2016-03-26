@@ -1,65 +1,23 @@
 ESRAP-LIQUID
 ============
 
-Why shouldn't I use full Common Lisp while defining packrat parser rules?
+MAJOR API CHANGE IN VERSIONS 2.*: we no longer use codewalker, hence rule definitions
+now compile much faster. The price to pay is that sometimes you need to specify
+manually, that something is a sub-rule (see V-macrolet).
 
-It originated as a fork of ESRAP by Nikodemus Siivola (https://github.com/nikodemus/esrap),
-but I quickly realized, that changes I wanted to make are so numerous, that in fact
-it should be a separate project.
+Packrat parser generator, with possibility to use full Common Lisp when defining parsing rules.
 
-Original idea is in this article:
+It started as a fork of ESRAP by Nikodemus Siivola (https://github.com/nikodemus/esrap),
+which is a DSL with (somewhat) more rigid syntax, but (as of now) nicer error reports.
+
+Original idea of a packrat parser generator is described in this article:
 
   * Bryan Ford, 2002, "Packrat Parsing: a Practical Linear Time
     Algorithm with Backtracking".
 
     http://pdos.csail.mit.edu/~baford/packrat/thesis/
 
-What I wanted to improve in ESRAP:
-  - add support of context-sensitive grammars (I was trying to implement parsing of YAML)
-    - specifically, when caching, context should be taken into considerations
-  - make interface for defining rules more flexible:
-    every now and then I needed a new feature of rule-defining DSL and it
-    required hacking of core ESRAP code
-  - like so many DSL-projects out there, ESRAP implemented its own codewalker,
-    and would *greatly* benfit from not doing so:
-    - so I wanted to somehow reuse CL codewalker
-    - in particular, this would allow definition of package-local rules and 
-      switch from interpreter mode to compiler mode. Theoretically, this would
-      make thing faster.
-
-The adjective, which suits the most to what I wanted ESRAP to be is "liquid",
-so I added it and started hacking...
-
-What I was able to do until now:
-  - full support of context sensitivity: you can 'register' variables, which store the context,
-    and their value is taken into account, while caching results
-  - full reuse of CL's codewalker.
-    Special ESRAP syntax, which makes it so convenient in the first place,
-    is achieved with help of CL-READ-MACRO-TOKENS library;
-    hence, you are abile to use *whole* CL, while defining rules
-  - definition of a rule is not split into separate syntactic part and semantic part
-    It gives more flexibility, but also more opportunities to write suboptimal code
-    (e.g. the costly semantic operations may be performed for discarded results)
-  - rules may depend on additional arguments
-    (for example, CHARACTER rule, which accepts character it should match to)
-    So, syntax of DEFRULE is now very close to syntax of DEFUN
-  - STREAMING!!! Currenly I'm teaching ESRAP-LIQUID to work with streams
-    (and in general to parse lazily) Hence, soon it will be possible to actually
-    implement Lisp-reader with it (i.e., concisely)
-  - debugging is done by setting *DEBUG* variable to T and recompiling the package.
-    After that every parse outputs to stdout a progress of parsing in nice indented way,
-    which helps to untangle even most complicated bugs
-
-What's not yet done:
-  - introspection features (description of a grammar)
-  - case-insensitive terminals
-  - friendly parsing error reports
-
-Here are some examples of use. For more examples,
-see example-sexp.lisp, example-symbol-table.lisp, example-very-context-sensitive.lisp.
-For more real-life examples see my YAML parser https://github.com/mabragor/cl-yaclyaml.
-The parsing part uses ESRAP-LIQUID extensively, in particular, in ways different from
-traditional ESRAP.
+Examples:
 
 ```lisp
 ; plain characters match to precisely that character in text
@@ -159,32 +117,40 @@ ESRAP-LIQUID> (parse '(? #\a) "a")
 ```
 
 Other operators, defined by ESRAP-LIQUID, include:
- - (character-ranges ranges) -- character ranges
- - (& followed-by)           -- does not consume
- - (-> followed-by-not-gen)  -- does not consume, produces NIL
+ - (character-ranges ranges) -- succeeds, when next character fits into specified ranges
+ - (& followed-by)           -- parses subclause, then rewinds iterator back, like PEEK-CHAR, but with possibly more complex expressions
+ - (-> followed-by-not-gen)  -- same as &, but produces NIL
  - (<- preceded-by-not-gen)  -- succeeds, if preceeded by something of length 1, produces NIL
- - (! not-followed-by)       -- does not consume
- - (pred #'<predicate> expr) -- semantic parsing
- - (most-full-parse &rest exprs) -- try to parse all subexpressions and choose the one than
-                                    consumed most
-
+ - (! not-followed-by)       -- an antipode of &, also rewinds iterator
+ - (pred #'<predicate> expr) -- succeeds, if #'<predicate> returns true
+ - (most-full-parse &rest exprs) -- try to parse all subexpressions and choose the longest one
+ - (v subexpr &rest args)    -- syntactic sugar for DESCEND-WITH-RULE
 
 Typical idioms:
 
 ```lisp
 ; succeed, when all subexpressions succeed, return list of those subexpressions
-ESRAP-LIQUID> (parse '(list #\a #\b #\c) "abc")
+; Note that now you need to explicitly write (V ...) in order to indicate that
+; character means "try to parse this character"
+ESRAP-LIQUID> (parse '(list (v #\a) (v #\b) (v #\c)) "abc")
 (#\a #\b #\c)
 3
 ; succeed, when all subexpression succeed, return only last subexpression
-ESRAP-LIQUID> (parse '(progn #\a #\b #\c) "abc")
+ESRAP-LIQUID> (parse '(progn (v #\a) (v #\b) (v #\c)) "abc")
 #\c
 3
 ; succeed, when all subexpression succeed, return only first subexpression
-ESRAP-LIQUID> (parse '(prog1 #\a #\b #\c) "abc")
+ESRAP-LIQUID> (parse '(prog1 (v #\a) (v #\b) (v #\c)) "abc")
 #\a
 3
 ```
+
+For more examples,
+see example-sexp.lisp, example-symbol-table.lisp, example-very-context-sensitive.lisp.
+For more real-life examples see my YAML parser https://github.com/mabragor/cl-yaclyaml.
+The parsing part uses ESRAP-LIQUID extensively, in particular, in ways different from
+traditional ESRAP.
+
 
 Defining rules
 --------------
@@ -203,9 +169,9 @@ ESRAP-LIQUID> (parse 'foo+ "foofoofoo")
 ; simple arguments to rules are also possible
 ESRAP-LIQUID> (defrule foo-times (times)
                 (times "foo" :exactly times))
-ESRAP-LIQUID> (parse '(descend-with-rule 'foo-times 3) "foofoofoo")
+ESRAP-LIQUID> (parse '(v foo-times 3) "foofoofoo")
 ("foo" "foo" "foo")
-ESRAP-LIQUID> (parse '(descend-with-rule 'foo-times 4) "foofoofoo")
+ESRAP-LIQUID> (parse '(v foo-times 4) "foofoofoo")
 #<ESRAP-LIQUID::SIMPLE-ESRAP-ERROR "~a~%">.
 ```
 
@@ -220,8 +186,8 @@ but instead in local 'environment' variable. This way you may have several non-c
 of rules defined at the same time.
 
 
-Capturing-variables
--------------------
+Capturing-variables : CAP, RECAP, RECAP?
+----------------------------------------
 
 Analogously to capturing groups in regexps, it is possible to capture
 results of parsing of named rules, to aid destructuring.
@@ -230,21 +196,24 @@ Example: instead of clumsy
 
 ```lisp
 (define-rule dressed-rule-clumsy ()
-  (prog1 (progn "foo" "bar" "baz"
-                meat)
-         "rest1" "rest2" "rest3"))
+  (prog1 (progn (v "foo") (v "bar") (v "baz")
+                (v meat))
+         (v "rest1") (v "rest2") (v "rest3")))
 ```
 
 you may write something like
 
 ```lisp
 (define-rule dressed-rule-elegant ()
-  "foo" "bar" "baz" c!-1-meat "rest1" "rest2" "rest3"
-  c!-1)
+  (v "foo") (v "bar") (v "baz") (cap 1 meat) (v "rest1") (v "rest2") (v "rest3")
+  (recap 1))
 ```
 
-I.e. result of parsing of rule with name MEAT is stored in variable C!-1,
-which is later accessed.
+I.e. result of parsing of rule with name MEAT is stashed with CAP macro and
+then accessed using RECAP macro.
+
+Difference between RECAP and RECAP? is that while the former fails parsing if
+the requested key was not captured, the latter just produces NIL.
 
 See tests for examples of usage.
 Also see CL-MIZAR parsing.lisp, where this is used a lot.
@@ -253,9 +222,8 @@ Also see CL-MIZAR parsing.lisp, where this is used a lot.
 Streaming
 ---------
 
-Now I made critical morphing of the code, such that it is now usable to
-parse not only strings of fixed length, but also streams and, in general,
-iterators of tokens.
+Now I made critical morphing of the code. Now it can be used not only to parse strings,
+but also streams and, in general, iterators of tokens.
 
 Here I understand iterators Pythonic style, i.e. they are classes with defined
 NEXT-ITER method (the __next__ method in Python), that throws
