@@ -53,7 +53,7 @@
 				     (,',(symbolicate "DEFINE-" symbol "-RULE") ,rule-name ()
 				       ;; KLUDGE: probably, special reader syntax for defining rules
 				       ;; will not work here anyway
-				       (pred #',pred-name t)
+				       (pred #',pred-name 't)
 				       nil))))
 			      plausible-contexts)
 		    (push ',context-var ,',(symbolicate symbol "-CONTEXTS"))))
