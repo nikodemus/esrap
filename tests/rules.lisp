@@ -254,14 +254,14 @@
   (times (v "f") :exactly n))
 
 
-(defrule cipher ()
+(defrule cifer ()
   (character-ranges (#\0 #\9)))
 
 (defrule recurcapturing ()
-  (v #\() (|| (progn (cap int cipher) (cap rc recurcapturing))
+  (v #\() (|| (progn (cap int cifer) (cap rc recurcapturing))
 	      (v #\a))
   (v #\))
-  (cons (recap int) (recap rc)))
+  (cons (recap? int) (recap? rc)))
 
 (defrule triple-a ()
   (list (v #\a) (v #\a) (v #\a)))

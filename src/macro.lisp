@@ -26,8 +26,9 @@
   "Assoc list used to capture temporary variables")
 
 (defmacro with-fresh-cap-stash (&body body)
+  "Extra level of indirection in *CAP-STASH* is needed to be able to insert new values in it"
   `(let* ((up-cap-stash *cap-stash*)
-	  (*cap-stash* nil))
+	  (*cap-stash* (cons nil nil)))
      (declare (ignorable up-cap-stash))
      ,@body))
 
@@ -35,11 +36,14 @@
   (defun propagate-cap-stash-upwards (up-var down-var body)
     (with-gensyms (g!-vals g!-it)
       `(let ((,g!-vals (multiple-value-list (progn ,@body))))
-	 (iter (for (key . val) in ,down-var)
-	       (let ((,g!-it (assoc key ,up-var)))
+	 (iter (for (key . val) in (car ,down-var))
+	       ;; (format t "Propagating ~a ~a ... " key val)
+	       (let ((,g!-it (assoc key (car ,up-var))))
 		 (if ,g!-it
-		     (setf (cdr ,g!-it) val)
-		     (push (cons key val) ,up-var))))
+		     (progn ;; (format t "update old~%")
+			    (setf (cdr ,g!-it) val))
+		     (progn ;; (format t "create new~%")
+			    (push (cons key val) (car ,up-var))))))
 	 (values-list ,g!-vals)))))
 
 (defmacro with-sub-cap-stash (&body body)
@@ -61,17 +65,20 @@
 	      (cap (key val)
 		(let ((key (intern (string key) "KEYWORD")))
 		  (with-gensyms (g!-it)
-		    `(let ((,g!-it (assoc ,key *cap-stash*)))
+		    `(let ((,g!-it (assoc ,key (car *cap-stash*))))
 		       (if ,g!-it
 			   (setf (cdr ,g!-it) ,(maybe-wrap-in-descent val))
-			   (push (cons ,key ,(maybe-wrap-in-descent val)) *cap-stash*))))))
+			   (push (cons ,key ,(maybe-wrap-in-descent val)) (car *cap-stash*)))))))
 	      (recap (key)
 		(let ((key (intern (string key) "KEYWORD")))
 		  (with-gensyms (g!-it)
-		    `(let ((,g!-it (assoc ,key *cap-stash*)))
+		    `(let ((,g!-it (assoc ,key (car *cap-stash*))))
 		       (if ,g!-it
 			   (cdr ,g!-it)
-			   (fail-parse-format "Key ~a is not captured (unbound)." ,key)))))))
+			   (fail-parse-format "Key ~a is not captured (unbound)." ,key))))))
+	      (recap? (key)
+		`(handler-case (recap ,key)
+		   (simple-esrap-error (e) nil))))
      ,body))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
