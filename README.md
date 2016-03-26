@@ -3,7 +3,7 @@ ESRAP-LIQUID
 
 MAJOR API CHANGE IN VERSIONS 2.*: we no longer use codewalker, hence rule definitions
 now compile much faster. The price to pay is that sometimes you need to specify
-manually, that something is a sub-rule (see V-macrolet).
+manually, that something is a sub-rule (see V-macrolet in source and section "API Change" in this README).
 
 Packrat parser generator, with possibility to use full Common Lisp when defining parsing rules.
 
@@ -245,4 +245,50 @@ includes:
       - TeX lexer + TeX parser (yes, it should be convenient to work not only
         on iterators of chars, but also on iterators of arbitrary tokens)
       - combined TeX + Lisp reader
-    
+
+API Change
+----------
+
+In versions 1.* of ESRAP-LIQUID, we used the following implicit conventions, when
+defining rules:
+  - character literals (#\<something>) were understood as "try to parse this character out of the stream"
+  - string literals ("something") were understood as "try to parse this string out of the stream"
+  - free variables were understood as "try to find ESRAP rule with this name and parse it out of the stream"
+
+These conventions are very handy when defining rules. However, the way they were implemented,
+is not optimal:
+  - character- and string-literal conventions required a use of implementation-dependent CL-READ-MACRO-TOKENS,
+    to introduce special reader syntax (which excluded use of ESRAP-LIQUID on unsupported implementations)
+  - free-variable convention required use of a codewalker (HU.DWIM.WALKER was used).
+    While acceptable for small rule sets, when using ESRAP-LIQUID for large (like VHDL) rule sets,
+    compilation really took long time (couple of minutes) and a lot of memory (GIGABYTES!)
+
+
+So now these conventions are not valid in the whole scope of DEFRULE, but only
+inside special macrolets. This allowed not to depend on codewalker and on special reader conventions.
+Now conventions are like this:
+  - special V macrolet (down-arrow-macrolet) is used to indicate, that here a descent into subrule is meant
+    ```lisp
+    (defrule foo ()
+       ...
+       (v #\a) ; parse literal char #\a
+       (v "asdf") ; parse literal string "asdf"
+       (v sub-rule x) ; parse a sub-rule, giving it an argument X (optional)
+       ...)
+    ```
+  - in a lot of places V-macrolet is implicitly assumed (in all macro, defined in ESRAP-LIQUID).
+    thus
+    ```lisp
+    (times #\a) ; will be correctly understood as "parse 0 or more characters 'A'"
+    ```
+    but in CL-form PROGN (or LIST) we have to explicitly write V-macrolets
+    ```lisp
+    (progn (v a) (v b) (v c)) ; parse sub-rules a, b and c
+    (list (v d) (v e) f) ; parse sub-rules d and e, return variable f
+    ```
+
+Thus, to make a transition of your ESRAP-LIQUID-using code to 2.* API, you need:
+  - go over all DEFRULE's and place V-macrolets in some places
+  - replace C!-vars (related to capturing) with CAP, RECAP, RECAP? macros (see above)
+
+
