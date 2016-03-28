@@ -35,16 +35,19 @@
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defun propagate-cap-stash-upwards (up-var down-var body)
     (with-gensyms (g!-vals g!-it)
-      `(let ((,g!-vals (multiple-value-list (progn ,@body))))
-	 (iter (for (key . val) in (car ,down-var))
-	       ;; (format t "Propagating ~a ~a ... " key val)
-	       (let ((,g!-it (assoc key (car ,up-var))))
-		 (if ,g!-it
-		     (progn ;; (format t "update old~%")
-			    (setf (cdr ,g!-it) val))
-		     (progn ;; (format t "create new~%")
-			    (push (cons key val) (car ,up-var))))))
-	 (values-list ,g!-vals)))))
+      (let ((meat `(iter (for (key . val) in (car ,down-var))
+			 ;; (format t "Propagating ~a ~a ... " key val)
+			 (let ((,g!-it (assoc key (car ,up-var))))
+			   (if ,g!-it
+			       (progn ;; (format t "update old~%")
+				 (setf (cdr ,g!-it) val))
+			       (progn ;; (format t "create new~%")
+				 (push (cons key val) (car ,up-var))))))))
+	(if (not body)
+	    `(progn ,meat nil)
+	    `(let ((,g!-vals (multiple-value-list (progn ,@body))))
+	       ,meat
+	       (values-list ,g!-vals)))))))
 
 (defmacro with-sub-cap-stash (&body body)
   `(with-fresh-cap-stash
