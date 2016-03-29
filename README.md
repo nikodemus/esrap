@@ -178,12 +178,23 @@ ESRAP-LIQUID> (parse '(v foo-times 4) "foofoofoo")
 Defining esrap-environments
 ---------------------------
 
-To be written, main macro are: DEFINE-ESRAP-ENV and IN-ESRAP-ENV
-Grep tests in order to see basic usage.
+Usually you don't want to mix parsing rules for different projects -- you want
+a mechanism to scope your rules in some way. For that you can use DEFINE-ESRAP-ENV macro.
 
-The feature is needed, if you want to define rules not in global *RULES* variable (the default),
-but instead in local 'environment' variable. This way you may have several non-colliding sets
-of rules defined at the same time.
+```lisp
+(define-esrap-env foobar)
+
+;; Now we can define rules in 'foobar' scope
+(define-foobar-rule asdf ()
+   ... ; rule definition here)
+```
+
+DEFINE-ESRAP-ENV has a MAINLY-NON-CONTEXT key. If it's T, then DEFINE-$(NAME)-RULE
+expands into DEF-NOCONTEXT-RULE, rather than DEFRULE.
+It's still possible to get context-sensitive rules by using DEFINE-C-$(NAME)-RULE.
+Vice versa, if MAINLY-NON-CONTEXT key is NIL (default), then non-context-sensitive rules
+can be defined using DEFINE-NC-$(NAME)-RULE.
+
 
 
 Capturing-variables : CAP, RECAP, RECAP?
