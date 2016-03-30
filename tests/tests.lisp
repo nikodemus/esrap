@@ -253,6 +253,10 @@
 				    (times #\a :exactly 5)))
 			    "aaaaa"))))
 
+(test hint-calling-rule
+  (is (equal '(nil x x nil)
+	     (parse 'sample-hint-calling-rule "aaaa"))))
+
 ;;; esrap-env
 
 ;; (test esrap-env-print-case

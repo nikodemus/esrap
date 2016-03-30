@@ -270,3 +270,12 @@
   (|| (list (v #\a) (v #\b) (v #\c))
       (list (v #\d) (v #\e) (v #\f))))
 
+(defrule sample-hinting-rule (&optional hint)
+  (v #\a)
+  hint)
+
+(defrule sample-hint-calling-rule ()
+  (list (v sample-hinting-rule)
+	(v sample-hinting-rule 'x)
+	(descend-with-rule 'sample-hinting-rule 'x)
+	(descend-with-rule 'sample-hinting-rule)))
