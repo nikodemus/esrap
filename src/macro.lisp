@@ -165,10 +165,7 @@
 				    (push e ,g!-parse-errors))))))
 			 clauses)
 	       (if-debug "|| before failing P ~a L ~a" the-position the-length)
-	       (fail-parse (joinl "~%"
-				  (mapcar (lambda (x)
-					    (slot-value x 'reason))
-					  (nreverse ,g!-parse-errors))))))
+	       (fail-parse "Optional parse failed")))
 	 (if-debug "|| aftermath ~a ~a" the-length ,g!-the-length)
 	 (incf the-length ,g!-the-length)
 	 ,g!-result))))
@@ -200,10 +197,7 @@
 		     (fast-forward the-iter length)
 		     (values res length))
 		   (progn (if-debug "|| before failing P ~a L ~a" the-position the-length)
-			  (fail-parse (joinl "~%"
-					     (mapcar (lambda (x)
-						       (slot-value x 'reason))
-						     (nreverse ,g!-parse-errors))))))))
+			  (fail-parse "MOST-FULL-PARSE failed.")))))
 	 (if-debug "MOST-FULL-PARSE aftermath ~a ~a" the-length ,g!-the-length)
 	 (incf the-length ,g!-the-length)
 	 ,g!-result))))
@@ -215,7 +209,8 @@
      (if-debug "! P ~a L ~a" the-position the-length)
      (the-position-boundary
        (with-saved-iter-state (the-iter)
-	 (handler-case (with-fresh-cap-stash ,(maybe-wrap-in-descent expr))
+	 (handler-case (let ((positive-mood nil))
+			 (with-fresh-cap-stash ,(maybe-wrap-in-descent expr)))
 	   (internal-esrap-error ()
 	     (restore-iter-state)
 	     nil)
@@ -231,7 +226,8 @@
      (if-debug "!!")
      (the-position-boundary
        (with-saved-iter-state (the-iter)
-	 (handler-case (with-fresh-cap-stash ,(maybe-wrap-in-descent expr))
+	 (handler-case (let ((positive-mood nil))
+			 (with-fresh-cap-stash ,(maybe-wrap-in-descent expr)))
 	   (internal-esrap-error ()
 	     (restore-iter-state)
 	     nil)
@@ -288,7 +284,8 @@
     `(tracing-level
        (if-debug "PREDICATE")
        (with-sub-cap-stash
-	 (let ((,g!-it ,(maybe-wrap-in-descent subexpr)))
+	 (let ((,g!-it (let ((positive-mood nil))
+			 ,(maybe-wrap-in-descent subexpr))))
 	   (if (funcall ,predicate ,g!-it)
 	       ,g!-it
 	       (fail-parse "Predicate test failed")))))))
@@ -306,7 +303,8 @@
 	     (the-position-boundary
 	       (print-iter-state)
 	       (with-saved-iter-state (the-iter)
-		 (handler-case (with-sub-cap-stash ,(maybe-wrap-in-descent subexpr))
+		 (handler-case (let ((positive-mood nil))
+				 (with-sub-cap-stash ,(maybe-wrap-in-descent subexpr)))
 		   (internal-esrap-error ()
 		     (restore-iter-state)
 		     (values nil nil))

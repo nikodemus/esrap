@@ -22,10 +22,6 @@
 				,@body))
 	 (remhash ',g!-rule *rules*)))))
 
-(defparameter max-failed-position 0)
-(defparameter max-rule-stack nil)
-(defparameter max-message "")
-
 (defun iter-last-text (position)
   (if (zerop position)
       "<start of stream>"
@@ -45,6 +41,10 @@
 					(collect x)))))))
 	  (restore-iter-state)))))
 
+(defvar max-failed-position)
+(defvar max-rule-stack)
+(defvar max-message)
+(defvar positive-mood)
 
 (defun parse-token-iter (expression token-iter &key junk-allowed)
   (let ((the-iter token-iter)
@@ -53,7 +53,8 @@
 	(the-length 0)
 	(max-failed-position 0)
 	(max-rule-stack nil)
-	(max-message ""))
+	(max-message "")
+	(positive-mood t))
     (tracing-init
       (with-tmp-rule (tmp-rule expression)
 	(let ((result (handler-case (descend-with-rule tmp-rule)
