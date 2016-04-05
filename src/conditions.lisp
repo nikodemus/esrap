@@ -93,31 +93,41 @@ the error occurred."))
 ;;                           position))
 ;;                 (format stream "~2&  <text and position not available>")))))
 
-(define-condition simple-esrap-error (esrap-error simple-condition) ())
+(define-condition simple-esrap-error (esrap-error simple-condition)
+  ((rule-stack :initarg :rule-stack :accessor rule-stack)))
 
-(defmethod print-object :before ((condition simple-esrap-error) stream)
-  (apply #'format stream
-         (simple-condition-format-control condition)
-         (simple-condition-format-arguments condition)))
+(define-condition internal-esrap-error (esrap-error) ())
 
-(declaim (ftype (function (t t t &rest t) (values nil &optional))
+(defmethod print-object :around ((condition simple-esrap-error) stream)
+  (with-slots (rule-stack position reason) condition
+    (format stream
+	    "ESRAP-LIQUID parsing failed.
+Rule-stack : (~{~a~^ ~})
+Position : ~a
+Specific reason: ~a~%" rule-stack position reason)))
+
+(declaim (ftype (function (t t t t &rest t) (values nil &optional))
                 simple-esrap-error))
-(defun simple-esrap-error (position reason format-control &rest format-arguments)
+(defun simple-esrap-error (rule-stack position reason)
   (error 'simple-esrap-error
 	 :text ""
+	 :rule-stack rule-stack
          :position position
-	 :reason reason
-         :format-control format-control
-         :format-arguments format-arguments))
+	 :reason reason))
 
 (defmacro fail-parse-format (&optional (reason "No particular reason.") &rest args)
-  `(let ((formatted-reason (apply #'format `(nil ,,reason ,,@args))))
-     (if-debug "fail: ~a P ~a L ~a" formatted-reason the-position the-length)
-     (simple-esrap-error (+ the-position the-length) formatted-reason ,reason ,@args)))
+  `(progn (when (>= (+ the-position the-length) max-failed-position)
+	    (setf max-failed-position (+ the-position the-length)
+		  max-rule-stack *rule-stack*
+		  max-message (apply #'format `(nil ,,reason ,,@args))))
+	  (error 'internal-esrap-error)))
 
 (defmacro fail-parse (&optional (reason "No particular reason."))
-  `(progn (if-debug "fail: ~a: P ~a L ~a" ,reason the-position the-length)
-	  (simple-esrap-error (+ the-position the-length) ,reason ,reason)))
+  `(progn (when (>= the-position max-failed-position)
+	    (setf max-failed-position the-position
+		  max-rule-stack *rule-stack*
+		  max-message ,reason))
+	  (error 'internal-esrap-error)))
 
 (define-condition left-recursion (esrap-error)
   ((nonterminal :initarg :nonterminal :initform nil :reader left-recursion-nonterminal)

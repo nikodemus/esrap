@@ -222,7 +222,7 @@
   (is (equal '("f" "f" "f" "f") (parse '(v f-opt-times 4) "ffff")))
   (signals-esrap-error ("ffff" 3 ("Didnt make it to the end of the text"))
                        (parse 'f-opt-times "ffff"))
-  (signals-esrap-error ("fff" 3 ("Greedy repetition failed"))
+  (signals-esrap-error ("fff" 3 ("EOF while trying to parse"))
                        (parse '(v f-opt-times 4) "fff")))
   
 (test recursive-capturing

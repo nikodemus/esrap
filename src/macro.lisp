@@ -8,14 +8,17 @@
 
 (cl-interpol:enable-interpol-syntax)
 
+(defvar *rule-stack* nil)
+
 (defmacro descend-with-rule (o!-sym &rest args)
   (with-gensyms (g!-it g!-got)
     (once-only (o!-sym)
       `(multiple-value-bind (,g!-it ,g!-got) (gethash ,o!-sym *rules*)
 	 (if (not ,g!-got)
 	     (error "Undefined rule: ~s" ,o!-sym)
-	     (tracing-level
-	       (funcall ,g!-it ,@args)))))))
+	     (let ((*rule-stack* (cons ,o!-sym *rule-stack*)))
+	       (tracing-level
+		 (funcall ,g!-it ,@args))))))))
 
 (defmacro the-position-boundary (&body body)
   `(let* ((the-position (+ the-position the-length))
@@ -81,7 +84,7 @@
 			   (fail-parse-format "Key ~a is not captured (unbound)." ,key))))))
 	      (recap? (key)
 		`(handler-case (recap ,key)
-		   (simple-esrap-error () nil))))
+		   (internal-esrap-error () nil))))
      ,body))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
@@ -157,7 +160,7 @@
 						(let ((res (with-sub-cap-stash ,(maybe-wrap-in-descent clause))))
 						  ;; (if-debug "|| pre-succeeding")
 						  (values res the-length)))
-				  (simple-esrap-error (e)
+				  (internal-esrap-error (e)
 				    (restore-iter-state)
 				    (push e ,g!-parse-errors))))))
 			 clauses)
@@ -184,7 +187,7 @@
 			      (with-saved-iter-state (the-iter)
 				(with-fresh-cap-stash
 				  (handler-case ,(maybe-wrap-in-descent clause)
-				    (simple-esrap-error (e)
+				    (internal-esrap-error (e)
 				      (restore-iter-state)
 				      (push e ,g!-parse-errors))
 				    (:no-error (res)
@@ -213,7 +216,7 @@
      (the-position-boundary
        (with-saved-iter-state (the-iter)
 	 (handler-case (with-fresh-cap-stash ,(maybe-wrap-in-descent expr))
-	   (simple-esrap-error ()
+	   (internal-esrap-error ()
 	     (restore-iter-state)
 	     nil)
 	   (:no-error (result)
@@ -229,7 +232,7 @@
      (the-position-boundary
        (with-saved-iter-state (the-iter)
 	 (handler-case (with-fresh-cap-stash ,(maybe-wrap-in-descent expr))
-	   (simple-esrap-error ()
+	   (internal-esrap-error ()
 	     (restore-iter-state)
 	     nil)
 	   (:no-error (result)
@@ -255,7 +258,7 @@
 						;; (format t "    succeeding ~s ~a~%" subexpr the-length)
 						;; (print-iter-state the-iter)
 						(values subexpr the-length)))
-				(simple-esrap-error ()
+				(internal-esrap-error ()
 				  ;; (format t "    failing~%")
 				  (restore-iter-state)
 				  (finish))))
@@ -304,7 +307,7 @@
 	       (print-iter-state)
 	       (with-saved-iter-state (the-iter)
 		 (handler-case (with-sub-cap-stash ,(maybe-wrap-in-descent subexpr))
-		   (simple-esrap-error ()
+		   (internal-esrap-error ()
 		     (restore-iter-state)
 		     (values nil nil))
 		   (:no-error (result) (return-from ,g!-? (values result the-length)))))))

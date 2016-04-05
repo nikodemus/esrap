@@ -16,7 +16,7 @@
 
 (defun eof-p ()
   (handler-case (descend-with-rule 'eof)
-    (simple-esrap-error () nil)))
+    (internal-esrap-error () nil)))
 
 (def-nocontext-rule sof ()
   (if (start-of-iter-p the-iter)

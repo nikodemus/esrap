@@ -66,14 +66,13 @@
 	(collect `(,key . ,val))))
 
 (defun failed-parse-p (e)
-  (typep e 'simple-esrap-error))
+  (typep e 'internal-esrap-error))
 
 (defmacro with-cached-result ((symbol &rest args) &body forms)
-  (with-gensyms (g!-cache g!-args g!-position g!-result)
-    `(let* ((,g!-cache *cache*)
-	    (,g!-args (list ,@args))
+  (with-gensyms (g!-args g!-position g!-result)
+    `(let* ((,g!-args (list ,@args))
 	    (,g!-position (+ the-position the-length))
-	    (,g!-result (get-cached ',symbol ,g!-position ,g!-args ,g!-cache))
+	    (,g!-result (get-cached ',symbol ,g!-position ,g!-args *cache*))
 	    (*nonterminal-stack* (cons ',symbol *nonterminal-stack*)))
        (cond ((eq :left-recursion ,g!-result)
 	      (error 'left-recursion
@@ -92,18 +91,18 @@
 	      (print-iter-state the-iter)
 	      ;; First mark this pair with :LEFT-RECURSION to detect left-recursion,
 	      ;; then compute the result and cache that.
-	      (setf (get-cached ',symbol ,g!-position ,g!-args ,g!-cache) :left-recursion)
+	      (setf (get-cached ',symbol ,g!-position ,g!-args *cache*) :left-recursion)
 	      (multiple-value-bind (result length)
 		  (handler-case (the-position-boundary
 				 (values (progn ,@forms) the-length))
-		    (simple-esrap-error (e) (values e :error)))
+		    (internal-esrap-error (e) (values e :error)))
 		;; (if-debug "after evaluation anew ~a ~a" length the-length)
 		;; LENGTH is non-NIL only for successful parses
-		(cond ((eq :error length) (setf (get-cached ',symbol ,g!-position ,g!-args ,g!-cache)
+		(cond ((eq :error length) (setf (get-cached ',symbol ,g!-position ,g!-args *cache*)
 						result)
 		       (error result))
 		      ((null length) (error "For some reason, length is NIL in memoization"))
-		      (t (setf (get-cached ',symbol ,g!-position ,g!-args ,g!-cache)
+		      (t (setf (get-cached ',symbol ,g!-position ,g!-args *cache*)
 			       (cons result length))
 			 (incf the-length length)
 			 (if-debug "after setting cache ~a" the-length)
