@@ -26,6 +26,26 @@
 (defparameter max-rule-stack nil)
 (defparameter max-message "")
 
+(defun iter-last-text (position)
+  (if (zerop position)
+      "<start of stream>"
+      (with-saved-iter-state (the-iter)
+	(unwind-protect
+	     (with-slots (cached-vals cached-pos) the-iter
+	       (with-slots (vector start-pointer) cached-vals
+		 (text (if (<= 5 (- position start-pointer))
+			   (progn (rewind the-iter (- position 5))
+				  (iter (for i from 1 to 5)
+					(for x in-iter the-iter)
+					(collect x)))
+			   (progn ;; (format t "start pointer : ~a~%" start-pointer)
+				  (rewind the-iter start-pointer)
+				  (iter (for i from 1 to (- position start-pointer))
+					(for x in-iter the-iter)
+					(collect x)))))))
+	  (restore-iter-state)))))
+
+
 (defun parse-token-iter (expression token-iter &key junk-allowed)
   (let ((the-iter token-iter)
 	(*cache* (make-cache))
@@ -40,13 +60,16 @@
 			(internal-esrap-error ()
 			  (if junk-allowed
 			      (values nil 0)
-			      (simple-esrap-error max-rule-stack max-failed-position max-message))))))
+			      (simple-esrap-error
+			       (iter-last-text max-failed-position)
+			       max-rule-stack max-failed-position max-message))))))
 	  (if-debug "after tmp-rule")
 	  (when (not junk-allowed)
 	    (handler-case (descend-with-rule 'eof)
 	      (internal-esrap-error ()
-		(simple-esrap-error nil (+ the-position the-length)
-				    "Didnt make it to the end of the text"))))
+		(simple-esrap-error
+		 (iter-last-text (+ the-position the-length))
+		 nil (+ the-position the-length) "Didn't make it to the end of the text"))))
 	  (values result the-length))))))
 
 (defun mk-esrap-iter-from-string (str start end)

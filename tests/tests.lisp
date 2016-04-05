@@ -74,7 +74,7 @@
     (parse 'integer ""))
   (signals-esrap-error ("123foo" 3 ("Clause under non-consuming negation succeeded"))
     (parse 'integer "123foo"))
-  (signals-esrap-error ("1, " 1 ("Didnt make it to the end of the text"))
+  (signals-esrap-error ("1, " 1 ("Didn't make it to the end of the text"))
     (parse 'list-of-integers "1, ")))
 
 (test non-consuming-negation
@@ -220,9 +220,9 @@
 (test optional-rule-args
   (is (equal '("f" "f" "f") (parse 'f-opt-times "fff")))
   (is (equal '("f" "f" "f" "f") (parse '(v f-opt-times 4) "ffff")))
-  (signals-esrap-error ("ffff" 3 ("Didnt make it to the end of the text"))
+  (signals-esrap-error ("ffff" 3 ("Didn't make it to the end of the text"))
                        (parse 'f-opt-times "ffff"))
-  (signals-esrap-error ("fff" 3 ("EOF while trying to parse"))
+  (signals-esrap-error ("fff" 3 ("Greedy repetition failed."))
                        (parse '(v f-opt-times 4) "fff")))
   
 (test recursive-capturing

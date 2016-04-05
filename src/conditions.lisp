@@ -99,18 +99,19 @@ the error occurred."))
 (define-condition internal-esrap-error (esrap-error) ())
 
 (defmethod print-object :around ((condition simple-esrap-error) stream)
-  (with-slots (rule-stack position reason) condition
+  (with-slots (rule-stack position reason text) condition
     (format stream
 	    "ESRAP-LIQUID parsing failed.
 Rule-stack : (~{~a~^ ~})
 Position : ~a
-Specific reason: ~a~%" rule-stack position reason)))
+Text right before : ~a
+Specific reason: ~a~%" rule-stack position text reason)))
 
-(declaim (ftype (function (t t t t &rest t) (values nil &optional))
-                simple-esrap-error))
-(defun simple-esrap-error (rule-stack position reason)
+;; (declaim (ftype (function (t t t t) (values nil &optional))
+;;                 simple-esrap-error))
+(defun simple-esrap-error (text rule-stack position reason)
   (error 'simple-esrap-error
-	 :text ""
+	 :text text
 	 :rule-stack rule-stack
          :position position
 	 :reason reason))
@@ -123,8 +124,8 @@ Specific reason: ~a~%" rule-stack position reason)))
 	  (error 'internal-esrap-error)))
 
 (defmacro fail-parse (&optional (reason "No particular reason."))
-  `(progn (when (>= the-position max-failed-position)
-	    (setf max-failed-position the-position
+  `(progn (when (>= (+ the-position the-length) max-failed-position)
+	    (setf max-failed-position (+ the-position the-length)
 		  max-rule-stack *rule-stack*
 		  max-message ,reason))
 	  (error 'internal-esrap-error)))
