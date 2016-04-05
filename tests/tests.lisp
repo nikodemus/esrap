@@ -270,3 +270,9 @@
 ;; (test esrap-env-print-case
 ;;   (is (eq :quux foo-context-1))
 ;;   (is-true (find-symbol "QUUX-FOO-CONTEXT-1-P")))
+
+(test parse-in-another-package
+  (is (equal "quux" (quux-parse 'quux-rule "quux"))))
+
+
+    

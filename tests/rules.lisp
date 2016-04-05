@@ -279,3 +279,11 @@
 	(v sample-hinting-rule 'x)
 	(descend-with-rule 'sample-hinting-rule 'x)
 	(descend-with-rule 'sample-hinting-rule)))
+
+(in-package #:esrap-liquid-tests-other)
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (define-esrap-env quux))
+
+(define-quux-rule quux-rule ()
+  (v "quux"))

@@ -9,3 +9,5 @@
 ;;   (setf *print-case* :downcase)
 ;;   (register-foo-context foo-context-1 quux)
 ;;   (setf *print-case* *old-print-case*))
+
+(register-foo-context foo-context-1 quux)
