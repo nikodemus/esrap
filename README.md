@@ -17,6 +17,8 @@ Original idea of a packrat parser generator is described in this article:
 
     http://pdos.csail.mit.edu/~baford/packrat/thesis/
 
+Operates *both* on strings and streams -- see section "Streaming" below.
+
 Examples:
 
 ```lisp
@@ -233,29 +235,39 @@ Also see CL-MIZAR parsing.lisp, where this is used a lot.
 Streaming
 ---------
 
-Now I made critical morphing of the code. Now it can be used not only to parse strings,
-but also streams and, in general, iterators of tokens.
+It's possible to parse both strings and streams. Main function for parsing streams
+is PARSE-STREAM.
 
-Here I understand iterators Pythonic style, i.e. they are classes with defined
-NEXT-ITER method (the __next__ method in Python), that throws
-stop-iteration error (the StopIteration exception in Python) when there are
+Example of usage:
+```lisp
+(parse-stream 'some-rule (make-string-input-stream "foobar") :junk-allowed t)
+```
+
+In general, both PARSE and PARSE-STREAMS are just wrappers around more
+general PARSE-TOKEN-ITER -- which accepts an iterator of tokens.
+Here, iterators are implemented "pythonic way", i.e. they are classes with
+NEXT-ITER method (the __next__ method in Python), that throw
+STOP-ITERATION condition (the StopIteration exception in Python) when there are
 no more values.
 
-Now the function PARSE (which accepts string) is just a wrapper around
-more general function PARSE-TOKEN-ITER (which accepts iterator of tokens)
+Thus, if you want ESRAP-LIQUID to parse something other than string or stream,
+just grep for how PARSE-TOKEN-ITER is used.
 
-This is only the stub of fantastic possibilities it opens, but the
-hard part (change of architechture) is over and only cosmetics remain, which
-includes:
-  - PARSE-STREAM function, which accepts stream
-  - MK-PARSING-ITER, creates iterator, which (lazily) parses the token stream
-    - this should not only parse with a fixed rule, but also with different
-      rule each time, and with supplied iterator of rules to parse in turn
-    - it should be *convenient* to implement
-      - Lisp reader
-      - TeX lexer + TeX parser (yes, it should be convenient to work not only
-        on iterators of chars, but also on iterators of arbitrary tokens)
-      - combined TeX + Lisp reader
+  Gotchas!
+  ========
+
+  -- Since Lisp streams only allow to unread one character, and ESRAP-LIQUID in general
+     does quite a lot of look-ahead, it's not safe to use a stream somewhere else after
+     it was fed to PARSE-STREAM (even when :junk-allowed is set to T). This is because
+     you don't know, what state the stream ends up in.
+
+
+When you define esrap environment using DEFINE-ESRAP-ENV, say, like
+```lisp
+(define-esrap-env foo)
+```
+you get both FOO-PARSE and FOO-PARSE-STREAM -- environment versions of main parsing functions.
+
 
 API Change
 ----------
