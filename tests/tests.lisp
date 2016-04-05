@@ -194,8 +194,13 @@
 (test esrap-env
   (is (equal "foo" (foo-parse 'abracadabra "")))
   (is (equal "bar" (bar-parse 'abracadabra "")))
+  (is (equal "foo" (foo-parse-stream 'abracadabra (make-string-input-stream ""))))
+  (is (equal "bar" (bar-parse-stream 'abracadabra (make-string-input-stream ""))))
   (signals (esrap-liquid::simple-error)
-    (parse 'abracadabra "")))
+    (parse 'abracadabra ""))
+  (signals (esrap-liquid::simple-error)
+    (parse-stream 'abracadabra (make-string-input-stream "")))
+  )
 
 (test rule-closures
   (is (equal :a (parse 'closure-rule "a")))
@@ -251,7 +256,10 @@
 (test most-full-parse
   (is (equal "aaaaa" (parse '(text (most-full-parse (times #\a :exactly 3)
 				    (times #\a :exactly 5)))
-			    "aaaaa"))))
+			    "aaaaa")))
+  (is (equal "aaaaa" (parse-stream '(text (most-full-parse (times #\a :exactly 3)
+					   (times #\a :exactly 5)))
+				   (make-string-input-stream "aaaaa")))))
 
 (test hint-calling-rule
   (is (equal '(nil x x nil)

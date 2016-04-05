@@ -45,10 +45,19 @@
 (defun mk-esrap-iter-from-string (str start end)
   (mk-cache-iter (mk-string-iter (subseq str start end))))
 
+(defun mk-esrap-iter-from-stream (stream)
+  (mk-cache-iter (mk-stream-iter stream)))
+
+
 (defun parse (expression text &key (start 0) end junk-allowed)
   "Parses TEXT using EXPRESSION from START to END. Incomplete parses
 are allowed only if JUNK-ALLOWED is true."
   (parse-token-iter expression (mk-esrap-iter-from-string text start end) :junk-allowed junk-allowed))
+
+(defun parse-stream (expression stream &key junk-allowed)
+  "Parses STREAM using EXPRESSION. Incomplete parses are allowed if JUNK-ALLOWED is true."
+  (parse-token-iter expression (mk-esrap-iter-from-stream stream) :junk-allowed junk-allowed))
+
 
 (defmacro character-ranges (&rest char-specs)
   (with-gensyms (g!-char)

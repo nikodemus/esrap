@@ -87,8 +87,15 @@
   ((pos :initform 0 :initarg :start)
    (str :initarg :string :initform "")))
 
+(defclass stream-iter ()
+  ((stream :initarg :stream :initform (error "STEAM is required argument"))))
+
+
 (defun mk-string-iter (string &key (start 0))
   (make-instance 'string-iter :string string :start start))
+
+(defun mk-stream-iter (stream)
+  (make-instance 'stream-iter :stream stream))
 
 (defmethod next-iter ((iter string-iter))
   (with-slots (str pos) iter
@@ -97,6 +104,11 @@
 	(let ((char (char str pos)))
 	  (incf pos)
 	  char))))
+
+(defmethod next-iter ((iter stream-iter))
+  (with-slots (stream) iter
+    (or (read-char stream nil nil nil)
+	(error 'stop-iteration))))
 
 (defclass cache-iterator ()
   ((cached-vals)

@@ -81,7 +81,7 @@
 			   (fail-parse-format "Key ~a is not captured (unbound)." ,key))))))
 	      (recap? (key)
 		`(handler-case (recap ,key)
-		   (simple-esrap-error (e) nil))))
+		   (simple-esrap-error () nil))))
      ,body))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
