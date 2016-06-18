@@ -76,7 +76,7 @@ ESRAP-LIQUID> (parse '(|| #\a #\b) "a")
 #\a
 1
 ESRAP-LIQUID> (parse '(|| #\a #\b) "b")
-#\a
+#\b
 1
 ESRAP-LIQUID> (parse '(|| #\a #\b) "c")
 #<ESRAP-LIQUID::SIMPLE-ESRAP-ERROR "~a~%">.
@@ -313,5 +313,3 @@ Now conventions are like this:
 Thus, to make a transition of your ESRAP-LIQUID-using code to 2.* API, you need:
   - go over all DEFRULE's and place V-macrolets in some places
   - replace C!-vars (related to capturing) with CAP, RECAP, RECAP? macros (see above)
-
-
