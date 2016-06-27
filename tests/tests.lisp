@@ -133,6 +133,11 @@
   (is (equal '(nil 0) (multiple-value-list (parse '(? (progn (v #\a) (v #\b))) "ac" :junk-allowed t))))
   (is (equal '(nil 0) (multiple-value-list (parse '(? (progn (v #\a) (v #\b) (v #\c))) "abd" :junk-allowed t)))))
 
+(test optional-test-progn-v
+  (is (equal '(#\b 2) (multiple-value-list (parse '(? (progn-v #\a #\b)) "ab"))))
+  (is (equal '(nil 0) (multiple-value-list (parse '(? (progn-v #\a #\b)) "ac" :junk-allowed t))))
+  (is (equal '(nil 0) (multiple-value-list (parse '(? (progn-v #\a #\b #\c)) "abd" :junk-allowed t)))))
+
 
 (test character-range-test
   (is (equal '(#\a #\b) (parse '(times (character-ranges (#\a #\z) #\-)) "ab" :junk-allowed t)))
@@ -182,6 +187,9 @@
 
 (test followed-by-not-gen
   (is (equal '("a" nil "b") (parse '(list (v "a") (-> "b") (v "b")) "ab"))))
+
+(test followed-by-not-gen-list-v
+  (is (equal '("a" nil "b") (parse '(list-v "a" (-> "b") "b") "ab"))))
 
 (test preceded-by-not-gen
   (is (equal '("a" nil "b") (parse '(list (v "a") (<- "a") (v "b")) "ab")))

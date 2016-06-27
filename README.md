@@ -127,6 +127,9 @@ Other operators, defined by ESRAP-LIQUID, include:
  - (pred #'<predicate> expr) -- succeeds, if #'<predicate> returns true
  - (most-full-parse &rest exprs) -- try to parse all subexpressions and choose the longest one
  - (v subexpr &rest args)    -- syntactic sugar for DESCEND-WITH-RULE
+ - (progn-v &rest forms)     -- like PROGN, but wraps its forms in DESCEND-WITH-RULE when needed
+ - (prog1-v &rest forms)     -- like PROG1, but wraps its forms in DESCEND-WITH-RULE when needed
+ - (list-v &rest forms)      -- like LIST, but wraps its forms in DESCEND-WITH-RULE when needed
 
 Typical idioms:
 
@@ -309,6 +312,10 @@ Now conventions are like this:
     (progn (v a) (v b) (v c)) ; parse sub-rules a, b and c
     (list (v d) (v e) f) ; parse sub-rules d and e, return variable f
     ```
+Update: it turned out that in practice one most commonly uses V-macrolet
+inside PROGN, LIST and PROG1 forms. So now ESRAP-LIQUID defines PROGN-V, LIST-V and PROG1-V
+versions, which work exactly as their non-V analogs, but wrap their sub-forms
+in DESCEND-WITH-RULE, where needed.
 
 Thus, to make a transition of your ESRAP-LIQUID-using code to 2.* API, you need:
   - go over all DEFRULE's and place V-macrolets in some places

@@ -294,6 +294,19 @@
   "Prog Middle."
   `(progn ,(maybe-wrap-in-descent start) (prog1 ,(maybe-wrap-in-descent meat) ,(maybe-wrap-in-descent end))))
 
+(defmacro progn-v (&rest forms)
+  "PROGN with automatic descent wrapping."
+  `(progn ,@(mapcar #'maybe-wrap-in-descent forms)))
+
+(defmacro prog1-v (&rest forms)
+  "PROG1 with automatic descent wrapping."
+  `(prog1 ,@(mapcar #'maybe-wrap-in-descent forms)))
+
+(defmacro list-v (&rest args)
+  "LIST with automatic descent wrapping."
+  `(list ,@(mapcar #'maybe-wrap-in-descent args)))
+
+
 (defmacro ? (subexpr)
   (with-gensyms (g!-? g!-result g!-the-length)
     `(tracing-level

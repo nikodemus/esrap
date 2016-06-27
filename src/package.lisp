@@ -9,7 +9,9 @@
 (defpackage :esrap-liquid
   (:use #:cl #:alexandria #:iterate)
   (:export
-   #:! #:? #:& #:~ #:<- #:-> #:!! #:times #:postimes #:pred #:progm #:cond-parse #:character-ranges
+   #:! #:? #:& #:~ #:<- #:-> #:!! #:times #:postimes #:pred
+   #:progm #:progn-v #:prog1-v #:list-v
+   #:cond-parse #:character-ranges
    #:most-full-parse
    #:match-start #:match-end
    #:literal-string #:literal-char
