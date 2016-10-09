@@ -230,11 +230,14 @@
   (is (equal '("f" "f" "f" "f") (parse '(v f-opt-times 4) "ffff")))
   (signals-esrap-error ("ffff" 3 ("Didn't make it to the end of the text"))
                        (parse 'f-opt-times "ffff"))
-  (signals-esrap-error ("fff" 3 ("Greedy repetition failed."))
+  (signals-esrap-error ("fff" 3 ("EOF while trying to parse any string"))
                        (parse '(v f-opt-times 4) "fff")))
   
 (test recursive-capturing
   (is (equal '(#\1 #\2 #\3 #\4 #\5 nil) (parse 'recurcapturing "(1(2(3(4(5(a))))))"))))
+
+(test token-iter
+  (is (equal :a (esrap-liquid::parse-token-iter 'closure-rule (esrap-liquid::mk-string-iter "a")))))
 
 
 

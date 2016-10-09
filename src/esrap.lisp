@@ -46,7 +46,7 @@
 (defvar max-message)
 (defvar positive-mood)
 
-(defun parse-token-iter (expression token-iter &key junk-allowed)
+(defun %parse-token-iter (expression token-iter &key junk-allowed)
   (let ((the-iter token-iter)
 	(*cache* (make-cache))
 	(the-position 0)
@@ -73,11 +73,14 @@
 		 nil (+ the-position the-length) "Didn't make it to the end of the text"))))
 	  (values result the-length))))))
 
+(defun parse-token-iter (expression token-iter &key junk-allowed)
+  (%parse-token-iter expression (mk-cache-iter token-iter) :junk-allowed junk-allowed))
+
 (defun mk-esrap-iter-from-string (str start end)
-  (mk-cache-iter (mk-string-iter (subseq str start end))))
+  (mk-string-iter (subseq str start end)))
 
 (defun mk-esrap-iter-from-stream (stream)
-  (mk-cache-iter (mk-stream-iter stream)))
+  (mk-stream-iter stream))
 
 
 (defun parse (expression text &key (start 0) end junk-allowed)

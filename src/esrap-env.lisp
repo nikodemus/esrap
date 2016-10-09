@@ -96,11 +96,20 @@
 				  `(:junk-allowed ,junk-allowed))))))
 	  (defmacro ,(s #?"$(symbol)-parse-stream") (expression stream &key  (junk-allowed nil junk-allowed-p))
 	    `(,',(s #?"with-$(symbol)-rules")
-	      (,',(s #?"with-$(symbol)-contexts")
-	       (parse-stream ,(reintern-to-right-package expression ,*package*)
-			     ,stream
-			    ,@(if junk-allowed-p
-				  `(:junk-allowed ,junk-allowed)))))))))
+		 (,',(s #?"with-$(symbol)-contexts")
+		     (parse-stream ,(reintern-to-right-package expression ,*package*)
+				   ,stream
+				   ,@(if junk-allowed-p
+					 `(:junk-allowed ,junk-allowed))))))
+	  (defmacro ,(s #?"$(symbol)-parse-token-iter") (expression token-iter
+							 &key  (junk-allowed nil junk-allowed-p))
+	    `(,',(s #?"with-$(symbol)-rules")
+		 (,',(s #?"with-$(symbol)-contexts")
+		     (parse-token-iter ,(reintern-to-right-package expression ,*package*)
+				       ,token-iter
+				       ,@(if junk-allowed-p
+					     `(:junk-allowed ,junk-allowed))))))
+	  )))
 	  
 
 			

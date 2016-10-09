@@ -256,6 +256,10 @@ no more values.
 Thus, if you want ESRAP-LIQUID to parse something other than string or stream,
 just grep for how PARSE-TOKEN-ITER is used.
 
+Change : PARSE-TOKEN-ITER now wraps the iterator into esrap caching iterator,
+so you don't have to do it manually.
+Also now ESRAP-ENV makes $(ENVNAME)-PARSE-TOKEN-ITER function accessible.
+
   Gotchas!
   ========
 
