@@ -204,3 +204,8 @@
     (with-slots (start-pointer vector) cached-vals
       (if-debug "  p ~a s ~a f ~a P ~a L ~a" 
 		cached-pos start-pointer (fill-pointer vector) the-position the-length))))
+
+(defmethod hard-shrink ((obj cache-iterator) num-elts-discarded)
+  (with-slots (cached-vals cached-pos) obj
+    (decf cached-pos num-elts-discarded)
+    (hard-shrink cached-vals num-elts-discarded)))

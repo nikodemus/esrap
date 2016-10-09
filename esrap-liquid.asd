@@ -34,6 +34,17 @@
                (:static-file "example-symbol-table.lisp")
                (:static-file "README")))
 
+(defsystem :esrap-liquid-iter
+  :version "0.1" ; odd minor version numbers are for unstable versions
+  :description "Extensions to ESRAP-LIQUID, using coroutines"
+  :licence "MIT"
+  :depends-on (#:alexandria #:iterate #:cl-itertools #:esrap-liquid)
+  :serial t
+  :components ((:module "src"
+                        :pathname "src/"
+                        :serial t
+                        :components ((:file "iter-extensions")))))
+
 (defsystem :esrap-liquid-tests
   :description "Tests for ESRAP-LIQUID."
   :licence "GPL"
