@@ -1,25 +1,41 @@
 
 (in-package :esrap-liquid)
 
-(cl-itertools:defiter %mk-tokenizer (expression token-iter &key junk-allowed)
-  (let ((the-iter token-iter)
-	(*cache* (make-cache)))
-    (iter (while t)
-	  (setf the-position 0
-		the-length 0
-		max-failed-position 0
-		max-rule-stack nil
-		max-message ""
-		positive-mood t)
+(defun mk-tokenizer (expression token-iter &key junk-allowed)
+  (let ((my-cache (make-cache))
+	(my-length nil)
+	(my-rules *rules*)
+	(my-contexts contexts))
+    (lambda ()
+      (when my-length
+	;; (format t "My-length is nonnil, shrinking by: ~a~%" my-length)
+	;; (format t "My-cache is: ~a~%" (print-esrap-cache my-cache))
+	;; (format t "My-iter is: ~a~%" (print-cache-iterator token-iter))
+	(hard-shrink my-cache my-length)
+	;; (format t "My-cache after shrinking is: ~a~%" (print-esrap-cache my-cache))
+	(hard-shrink token-iter my-length)
+	;; (format t "My-iter after shrinking is: ~a~%" (print-cache-iterator token-iter))
+	)
+      (let ((*cache* my-cache)
+	    (the-iter token-iter)
+	    (the-position 0)
+	    (the-length 0)
+	    (max-failed-position 0)
+	    (max-rule-stack nil)
+	    (max-message "")
+	    (positive-mood t))
+	(let ((*rules* my-rules)
+	      (contexts my-contexts))
 	  (tracing-init
 	    (with-tmp-rule (tmp-rule expression)
 	      (let ((result (handler-case (descend-with-rule tmp-rule)
 			      (internal-esrap-error ()
 				(if junk-allowed
-				    (values nil 0)
-				    (simple-esrap-error
-				     (iter-last-text max-failed-position)
-				     max-rule-stack max-failed-position max-message))))))
-		(cl-itertools:yield (values result the-length)))))
-	  (hard-shrink *cache* the-length)
-	  (hard-shrink the-iter the-length))))
+				    (error 'stop-iteration)
+				    (if (eof-error-p)
+					(error 'stop-iteration)
+					(simple-esrap-error
+					 (iter-last-text max-failed-position)
+					 max-rule-stack max-failed-position max-message)))))))
+		(setf my-length the-length)
+		(values result the-length)))))))))

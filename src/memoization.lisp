@@ -19,6 +19,12 @@
 (defun make-cache ()
   (make-instance 'esrap-cache))
 
+(defun print-esrap-cache (cache)
+  (format nil "[~a ~a]" (slot-value cache 'start-pos)
+	  (mapcar (lambda (x)
+		    (cons (car x) (hash->assoc (cdr x))))
+		  (hash->assoc (slot-value cache 'pos-hashtable)))))
+
 (defgeneric get-cached (symbol position args cache)
   (:documentation "Accessor for cached parsing results."))
 

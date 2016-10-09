@@ -109,6 +109,14 @@
 				       ,token-iter
 				       ,@(if junk-allowed-p
 					     `(:junk-allowed ,junk-allowed))))))
+	  (defmacro ,(s #?"mk-$(symbol)-tokenizer") (expression token-iter
+						     &key  (junk-allowed nil junk-allowed-p))
+	    `(,',(s #?"with-$(symbol)-rules")
+		 (,',(s #?"with-$(symbol)-contexts")
+		     (mk-tokenizer ,(reintern-to-right-package expression ,*package*)
+				   ,token-iter
+				   ,@(if junk-allowed-p
+					 `(:junk-allowed ,junk-allowed))))))
 	  )))
 	  
 

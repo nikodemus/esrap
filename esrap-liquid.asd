@@ -11,7 +11,7 @@
 (in-package :esrap-liquid-system)
 
 (defsystem :esrap-liquid
-  :version "2.1" ; odd minor version numbers are for unstable versions
+  :version "2.3" ; odd minor version numbers are for unstable versions
   :description "A Packrat / Parsing Grammar / TDPL parser for Common Lisp."
   :licence "GPL"
   :depends-on (#:alexandria #:iterate #:cl-ppcre #:cl-interpol)
@@ -29,21 +29,11 @@
                                      (:file "esrap")
                                      (:file "basic-rules")
                                      (:file "esrap-env")
+				     (:file "iter-extensions")
 				     ))
                (:static-file "example-sexp.lisp")
                (:static-file "example-symbol-table.lisp")
                (:static-file "README")))
-
-(defsystem :esrap-liquid-iter
-  :version "0.1" ; odd minor version numbers are for unstable versions
-  :description "Extensions to ESRAP-LIQUID, using coroutines"
-  :licence "MIT"
-  :depends-on (#:alexandria #:iterate #:cl-itertools #:esrap-liquid)
-  :serial t
-  :components ((:module "src"
-                        :pathname "src/"
-                        :serial t
-                        :components ((:file "iter-extensions")))))
 
 (defsystem :esrap-liquid-tests
   :description "Tests for ESRAP-LIQUID."

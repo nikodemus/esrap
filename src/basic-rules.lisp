@@ -29,7 +29,10 @@
 		   (stop-iteration ()
 		     (fail-parse "EOF while trying to parse any string of specified length.")))))
     (make-result (coerce pre-res 'string) length)))
-        
+
+(defun eof-error-p ()
+  (cl-ppcre:all-matches-as-strings "^EOF" max-message))
+
 (defmacro any-string (length)
   `(descend-with-rule 'any-string ,length))
 

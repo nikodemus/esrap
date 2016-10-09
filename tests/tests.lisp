@@ -285,5 +285,21 @@
 (test parse-in-another-package
   (is (equal "quux" (quux-parse 'quux-rule "quux"))))
 
-
+(test mk-tokenizer
+  (let ((tokenizer (esrap-liquid::mk-tokenizer '(v character)
+					       (esrap-liquid::mk-cache-iter
+						(esrap-liquid::mk-string-iter "asdf")))))
+    (is (equal '(#\a #\s #\d #\f) (iter (for x next (handler-case (funcall tokenizer)
+						      (esrap-liquid::stop-iteration ()
+							(terminate))))
+					(collect x)))))
+  (let ((tokenizer (esrap-liquid-tests-other::mk-quux-tokenizer
+		    'quux-rule
+		    (esrap-liquid::mk-cache-iter
+		     (esrap-liquid::mk-string-iter "quuxquuxquux")))))
+    (is (equal '("quux" "quux" "quux") (iter (for x next (handler-case (funcall tokenizer)
+							   (esrap-liquid::stop-iteration ()
+							     (terminate))))
+					     (collect x))))))
     
+								

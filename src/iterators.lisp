@@ -19,6 +19,10 @@
   ((vector)
    (start-pointer :initform 0)))
 
+(defun print-buffer-vector (vec)
+  (with-slots (vector start-pointer) vec
+    (format nil "[~a ~a]" start-pointer vector)))
+
 (defmethod initialize-instance :after ((this buffer-vector) &key &allow-other-keys)
   (with-slots (vector) this
     (setf vector (make-array buffer-vector-start-length :adjustable t :fill-pointer t))))
@@ -49,6 +53,7 @@
 	  (incf start-pointer num-elts-discarded)))))
 
 (defun calc-new-buffer-length (old-buffer-vector start-pointer)
+  "If we actually only use half of the buffer, shrink it in half."
   (let ((full-array-length (array-dimension old-buffer-vector 0))
 	(actual-length (- (fill-pointer old-buffer-vector) start-pointer)))
     (if (> actual-length (/ full-array-length 2))
@@ -59,9 +64,9 @@
 (defmethod hard-shrink ((obj buffer-vector) (num-elts-discarded integer))
   (with-slots (vector start-pointer) obj
     (let ((new-vector (make-array (calc-new-buffer-length vector start-pointer) :adjustable t :fill-pointer t)))
-      (iter (for i from 0 to (- (fill-pointer vector) start-pointer 1))
-	    (setf (aref new-vector i) (aref vector (+ start-pointer i))))
-      (setf (fill-pointer new-vector) (- (fill-pointer vector) start-pointer)
+      (iter (for i from 0 to (- (fill-pointer vector) start-pointer 1 num-elts-discarded))
+	    (setf (aref new-vector i) (aref vector (+ start-pointer i num-elts-discarded))))
+      (setf (fill-pointer new-vector) (- (fill-pointer vector) start-pointer num-elts-discarded)
 	    start-pointer 0
 	    vector new-vector))))
       
@@ -114,6 +119,11 @@
   ((cached-vals)
    (cached-pos :initform 0)
    (sub-iter :initform (error "Please, specify underlying iterator") :initarg :sub-iter)))
+
+(defun print-cache-iterator (iter)
+  (with-slots (cached-pos cached-vals) iter
+    (format nil "[~a ~a]" cached-pos (print-buffer-vector cached-vals))))
+      
 
 (defmethod initialize-instance :after ((this cache-iterator) &key &allow-other-keys)
   (with-slots (cached-vals) this
